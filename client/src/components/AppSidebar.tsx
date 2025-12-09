@@ -15,7 +15,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Building2, LayoutDashboard, FolderKanban, LogOut, Settings } from "lucide-react";
+import { Building2, LayoutDashboard, FolderKanban, LogOut, Settings, GitCompare } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import type { Project } from "@shared/schema";
 
@@ -53,6 +53,14 @@ export function AppSidebar() {
                   <Link href="/" data-testid="link-dashboard">
                     <LayoutDashboard className="h-4 w-4" />
                     <span>Ana Sayfa</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/comparison"}>
+                  <Link href="/comparison" data-testid="link-comparison">
+                    <GitCompare className="h-4 w-4" />
+                    <span>Proje Karşılaştırma</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

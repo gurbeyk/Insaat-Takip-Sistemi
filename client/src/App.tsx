@@ -13,11 +13,13 @@ import NotFound from "@/pages/not-found";
 import Landing from "@/pages/Landing";
 import Home from "@/pages/Home";
 import ProjectDetail from "@/pages/ProjectDetail";
+import ProjectComparison from "@/pages/ProjectComparison";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/comparison" component={ProjectComparison} />
       <Route path="/projects/:id" component={ProjectDetail} />
       <Route component={NotFound} />
     </Switch>
