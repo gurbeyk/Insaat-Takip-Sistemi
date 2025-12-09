@@ -23,6 +23,7 @@ import {
 import { DataEntryTab } from "@/components/DataEntryTab";
 import { ReportsTab } from "@/components/ReportsTab";
 import { ProjectSettingsTab } from "@/components/ProjectSettingsTab";
+import { TeamTab } from "@/components/TeamTab";
 import type { Project, WorkItem, DailyEntry } from "@shared/schema";
 
 interface ProjectWithDetails extends Project {
@@ -253,7 +254,7 @@ export default function ProjectDetail() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-4 max-w-lg">
+        <TabsList className="grid w-full grid-cols-5 max-w-2xl">
           <TabsTrigger value="overview" data-testid="tab-overview" className="flex items-center gap-2">
             <Clock className="h-4 w-4" />
             <span className="hidden sm:inline">Genel Bakış</span>
@@ -265,6 +266,10 @@ export default function ProjectDetail() {
           <TabsTrigger value="reports" data-testid="tab-reports" className="flex items-center gap-2">
             <BarChart3 className="h-4 w-4" />
             <span className="hidden sm:inline">Raporlar</span>
+          </TabsTrigger>
+          <TabsTrigger value="team" data-testid="tab-team" className="flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            <span className="hidden sm:inline">Ekip</span>
           </TabsTrigger>
           <TabsTrigger value="settings" data-testid="tab-settings" className="flex items-center gap-2">
             <Building2 className="h-4 w-4" />
@@ -354,6 +359,10 @@ export default function ProjectDetail() {
 
         <TabsContent value="reports" className="mt-6">
           <ReportsTab project={project} />
+        </TabsContent>
+
+        <TabsContent value="team" className="mt-6">
+          <TeamTab project={project} />
         </TabsContent>
 
         <TabsContent value="settings" className="mt-6">

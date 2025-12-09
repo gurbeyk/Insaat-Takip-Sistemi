@@ -7,6 +7,7 @@ import {
   insertWorkItemSchema,
   insertDailyEntrySchema,
   insertMonthlyScheduleSchema,
+  insertProjectMemberSchema,
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -479,6 +480,137 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching performance:", error);
       res.status(500).json({ message: "Failed to fetch performance data" });
+    }
+  });
+
+  app.get("/api/users", isAuthenticated, async (req: any, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      res.json(users);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  app.get("/api/projects/:id/members", isAuthenticated, async (req: any, res) => {
+    try {
+      const projectId = req.params.id;
+      const userId = req.user.claims.sub;
+      
+      if (!(await storage.canAccessProject(projectId, userId))) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      const members = await storage.getProjectMembersWithUsers(projectId);
+      const project = await storage.getProject(projectId);
+      
+      res.json({
+        members,
+        createdBy: project?.createdBy,
+        isAdmin: await storage.isProjectAdmin(projectId, userId),
+      });
+    } catch (error) {
+      console.error("Error fetching project members:", error);
+      res.status(500).json({ message: "Failed to fetch project members" });
+    }
+  });
+
+  app.post("/api/projects/:id/members", isAuthenticated, async (req: any, res) => {
+    try {
+      const projectId = req.params.id;
+      const userId = req.user.claims.sub;
+      
+      if (!(await storage.isProjectAdmin(projectId, userId))) {
+        return res.status(403).json({ message: "Only project admins can add members" });
+      }
+      
+      const parsed = insertProjectMemberSchema.parse({
+        ...req.body,
+        projectId,
+      });
+      
+      const existingMembers = await storage.getProjectMembers(projectId);
+      const alreadyMember = existingMembers.find(m => m.userId === parsed.userId);
+      if (alreadyMember) {
+        return res.status(400).json({ message: "User is already a member of this project" });
+      }
+      
+      const member = await storage.addProjectMember(parsed);
+      res.status(201).json(member);
+    } catch (error) {
+      console.error("Error adding project member:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid member data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to add project member" });
+    }
+  });
+
+  app.patch("/api/projects/:id/members/:memberId", isAuthenticated, async (req: any, res) => {
+    try {
+      const projectId = req.params.id;
+      const memberUserId = req.params.memberId;
+      const userId = req.user.claims.sub;
+      const { role } = req.body;
+      
+      if (!(await storage.isProjectAdmin(projectId, userId))) {
+        return res.status(403).json({ message: "Only project admins can update member roles" });
+      }
+      
+      if (!["admin", "editor", "viewer"].includes(role)) {
+        return res.status(400).json({ message: "Invalid role" });
+      }
+      
+      if (role !== "admin") {
+        const members = await storage.getProjectMembers(projectId);
+        const targetMember = members.find(m => m.userId === memberUserId);
+        
+        if (targetMember?.role === "admin") {
+          const adminCount = members.filter(m => m.role === "admin").length;
+          if (adminCount <= 1) {
+            return res.status(400).json({ message: "Cannot demote the only admin" });
+          }
+        }
+      }
+      
+      const updated = await storage.updateProjectMemberRole(projectId, memberUserId, role);
+      if (!updated) {
+        return res.status(404).json({ message: "Member not found" });
+      }
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating member role:", error);
+      res.status(500).json({ message: "Failed to update member role" });
+    }
+  });
+
+  app.delete("/api/projects/:id/members/:memberId", isAuthenticated, async (req: any, res) => {
+    try {
+      const projectId = req.params.id;
+      const memberUserId = req.params.memberId;
+      const userId = req.user.claims.sub;
+      
+      if (!(await storage.isProjectAdmin(projectId, userId))) {
+        return res.status(403).json({ message: "Only project admins can remove members" });
+      }
+      
+      const members = await storage.getProjectMembers(projectId);
+      const memberToRemove = members.find(m => m.userId === memberUserId);
+      
+      if (memberToRemove?.role === "admin") {
+        const adminCount = members.filter(m => m.role === "admin").length;
+        if (adminCount <= 1) {
+          return res.status(400).json({ message: "Cannot remove the only admin" });
+        }
+      }
+      
+      await storage.removeProjectMember(projectId, memberUserId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error removing project member:", error);
+      res.status(500).json({ message: "Failed to remove project member" });
     }
   });
 

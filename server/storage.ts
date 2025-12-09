@@ -24,11 +24,13 @@ import { eq, and, desc, sql, between, gte, lte } from "drizzle-orm";
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
+  getAllUsers(): Promise<User[]>;
   
   getProjects(userId: string): Promise<Project[]>;
   getProject(id: string): Promise<Project | undefined>;
   getProjectForUser(projectId: string, userId: string): Promise<Project | undefined>;
   canAccessProject(projectId: string, userId: string): Promise<boolean>;
+  isProjectAdmin(projectId: string, userId: string): Promise<boolean>;
   createProject(project: InsertProject): Promise<Project>;
   updateProject(id: string, project: Partial<InsertProject>): Promise<Project | undefined>;
   deleteProject(id: string): Promise<void>;
@@ -50,7 +52,9 @@ export interface IStorage {
   upsertMonthlySchedule(schedule: InsertMonthlySchedule): Promise<MonthlySchedule>;
   
   getProjectMembers(projectId: string): Promise<ProjectMember[]>;
+  getProjectMembersWithUsers(projectId: string): Promise<(ProjectMember & { user: User | null })[]>;
   addProjectMember(member: InsertProjectMember): Promise<ProjectMember>;
+  updateProjectMemberRole(projectId: string, userId: string, role: string): Promise<ProjectMember | undefined>;
   removeProjectMember(projectId: string, userId: string): Promise<void>;
 }
 
@@ -73,6 +77,10 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return user;
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return await db.select().from(users).orderBy(users.firstName);
   }
 
   async getProjects(userId: string): Promise<Project[]> {
@@ -132,6 +140,28 @@ export class DatabaseStorage implements IStorage {
   async canAccessProject(projectId: string, userId: string): Promise<boolean> {
     const project = await this.getProjectForUser(projectId, userId);
     return project !== undefined;
+  }
+
+  async isProjectAdmin(projectId: string, userId: string): Promise<boolean> {
+    const project = await this.getProject(projectId);
+    if (!project) return false;
+    
+    if (project.createdBy === userId) {
+      return true;
+    }
+    
+    const [membership] = await db
+      .select()
+      .from(projectMembers)
+      .where(
+        and(
+          eq(projectMembers.projectId, projectId),
+          eq(projectMembers.userId, userId),
+          eq(projectMembers.role, "admin")
+        )
+      );
+    
+    return !!membership;
   }
 
   async createProject(project: InsertProject): Promise<Project> {
@@ -268,9 +298,39 @@ export class DatabaseStorage implements IStorage {
       .where(eq(projectMembers.projectId, projectId));
   }
 
+  async getProjectMembersWithUsers(projectId: string): Promise<(ProjectMember & { user: User | null })[]> {
+    const members = await db
+      .select()
+      .from(projectMembers)
+      .where(eq(projectMembers.projectId, projectId));
+    
+    const membersWithUsers = await Promise.all(
+      members.map(async (member) => {
+        const [user] = await db.select().from(users).where(eq(users.id, member.userId));
+        return { ...member, user: user || null };
+      })
+    );
+    
+    return membersWithUsers;
+  }
+
   async addProjectMember(member: InsertProjectMember): Promise<ProjectMember> {
     const [newMember] = await db.insert(projectMembers).values(member).returning();
     return newMember;
+  }
+
+  async updateProjectMemberRole(projectId: string, userId: string, role: string): Promise<ProjectMember | undefined> {
+    const [updated] = await db
+      .update(projectMembers)
+      .set({ role })
+      .where(
+        and(
+          eq(projectMembers.projectId, projectId),
+          eq(projectMembers.userId, userId)
+        )
+      )
+      .returning();
+    return updated;
   }
 
   async removeProjectMember(projectId: string, userId: string): Promise<void> {
