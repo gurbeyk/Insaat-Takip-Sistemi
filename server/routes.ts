@@ -340,12 +340,15 @@ export async function registerRoutes(
       
       const parsedEntries = items.map((entry) => {
         if (uploadType === 'progress') {
+          const noteParts: string[] = [];
+          if (entry.ratio) noteParts.push(`Oran: ${entry.ratio}`);
+          if (entry.region) noteParts.push(`Bölge: ${entry.region}`);
           return insertDailyEntrySchema.parse({
             workItemId: entry.workItemId,
             entryDate: entry.entryDate,
             quantity: entry.quantity,
             manHours: 0,
-            notes: entry.region ? `Bölge: ${entry.region}${entry.ratio ? `, Oran: ${entry.ratio}` : ''}` : (entry.ratio || ''),
+            notes: noteParts.join(', '),
             projectId,
             enteredBy: userId,
           });

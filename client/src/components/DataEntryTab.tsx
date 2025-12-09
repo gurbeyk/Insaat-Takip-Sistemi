@@ -11,9 +11,10 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { FileSpreadsheet, Upload, Loader2, Download, Clock, TrendingUp } from "lucide-react";
+import { FileSpreadsheet, Upload, Loader2, Download, Clock, TrendingUp, Trash2, Pencil, Check, X } from "lucide-react";
 import * as XLSX from "xlsx";
 import type { Project, WorkItem, DailyEntry } from "@shared/schema";
 import { 
@@ -24,9 +25,32 @@ import {
   type ValidationResult 
 } from "@/lib/excelValidation";
 import { ValidationResultDialog } from "./ValidationResultDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface DataEntryTabProps {
   project: Project & { workItems?: WorkItem[]; dailyEntries?: DailyEntry[] };
+}
+
+function parseNotes(notes: string | null | undefined) {
+  const noteStr = notes || "";
+  const regionMatch = noteStr.match(/Bölge:\s*([^,]+)/);
+  const ratioMatch = noteStr.match(/Oran:\s*([^,]+)/);
+  let region = regionMatch ? regionMatch[1].trim() : "";
+  let ratio = ratioMatch ? ratioMatch[1].trim() : "";
+  
+  if (!region && !ratio && noteStr.trim()) {
+    ratio = noteStr.trim();
+  }
+  return { region, ratio };
 }
 
 export function DataEntryTab({ project }: DataEntryTabProps) {
@@ -38,6 +62,9 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
   const [pendingEntries, setPendingEntries] = useState<(WorkProgressRow | ManHoursRow)[]>([]);
   const [totalRows, setTotalRows] = useState(0);
   const [uploadType, setUploadType] = useState<'progress' | 'manhours'>('progress');
+  const [deleteEntryId, setDeleteEntryId] = useState<string | null>(null);
+  const [editingEntry, setEditingEntry] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<{ quantity: number; manHours: number; ratio: string; region: string }>({ quantity: 0, manHours: 0, ratio: "", region: "" });
 
   const { data: entries, isLoading: entriesLoading } = useQuery<(DailyEntry & { workItem?: WorkItem })[]>({
     queryKey: ["/api/projects", project.id, "entries"],
@@ -65,6 +92,37 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
         description: error.message || "Toplu veri yüklenirken bir hata oluştu.",
         variant: "destructive",
       });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (entryId: string) => {
+      return await apiRequest("DELETE", `/api/entries/${entryId}`);
+    },
+    onSuccess: () => {
+      toast({ title: "Silindi", description: "Kayıt başarıyla silindi." });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id, "entries"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects/with-stats"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Hata", description: error.message || "Silme işlemi başarısız.", variant: "destructive" });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ entryId, data }: { entryId: string; data: { quantity: number; notes: string } }) => {
+      return await apiRequest("PATCH", `/api/entries/${entryId}`, data);
+    },
+    onSuccess: () => {
+      toast({ title: "Güncellendi", description: "Kayıt başarıyla güncellendi." });
+      setEditingEntry(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id, "entries"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects/with-stats"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Hata", description: error.message || "Güncelleme başarısız.", variant: "destructive" });
     },
   });
 
@@ -216,19 +274,13 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
     }
 
     const exportData = entries.map((entry) => {
-      const notes = entry.notes || "";
-      const regionMatch = notes.match(/Bölge:\s*([^,]+)/);
-      const ratioMatch = notes.match(/Oran:\s*([^,]+)/);
-      const region = regionMatch ? regionMatch[1].trim() : "";
-      const ratio = ratioMatch ? ratioMatch[1].trim() : (notes && !notes.includes("Bölge:") ? notes : "");
-      
+      const { region, ratio } = parseNotes(entry.notes);
       return {
         "Tarih": entry.entryDate,
         "Bütçe Kodu": entry.workItem?.budgetCode || "",
         "İmalat Kalemi": entry.workItem?.name || "",
         "Birim": entry.workItem?.unit || "",
         "Miktar": entry.quantity,
-        "Adam-Saat": entry.manHours,
         "Oranlar": ratio,
         "İmalat Bölgesi": region,
       };
@@ -238,6 +290,43 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Günlük Veriler");
     XLSX.writeFile(workbook, `${project.name}_gunluk_veriler.xlsx`);
+  };
+
+  const startEditing = (entry: DailyEntry & { workItem?: WorkItem }) => {
+    const { region, ratio } = parseNotes(entry.notes);
+    setEditingEntry(entry.id);
+    setEditValues({
+      quantity: entry.quantity || 0,
+      manHours: entry.manHours || 0,
+      ratio,
+      region,
+    });
+  };
+
+  const cancelEditing = () => {
+    setEditingEntry(null);
+    setEditValues({ quantity: 0, manHours: 0, ratio: "", region: "" });
+  };
+
+  const saveEditing = (entryId: string) => {
+    const noteParts: string[] = [];
+    if (editValues.ratio) noteParts.push(`Oran: ${editValues.ratio}`);
+    if (editValues.region) noteParts.push(`Bölge: ${editValues.region}`);
+    
+    updateMutation.mutate({
+      entryId,
+      data: {
+        quantity: editValues.quantity,
+        notes: noteParts.join(', '),
+      },
+    });
+  };
+
+  const handleDeleteConfirm = () => {
+    if (deleteEntryId) {
+      deleteMutation.mutate(deleteEntryId);
+      setDeleteEntryId(null);
+    }
   };
 
   return (
@@ -379,18 +468,15 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
                     <TableHead>İmalat Kalemi</TableHead>
                     <TableHead>Birim</TableHead>
                     <TableHead className="text-right">Miktar</TableHead>
-                    <TableHead className="text-right">Adam-Saat</TableHead>
                     <TableHead>Oranlar</TableHead>
                     <TableHead>İmalat Bölgesi</TableHead>
+                    <TableHead className="text-right">İşlemler</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {entries.slice(0, 20).map((entry) => {
-                    const notes = entry.notes || "";
-                    const regionMatch = notes.match(/Bölge:\s*([^,]+)/);
-                    const ratioMatch = notes.match(/Oran:\s*([^,]+)/);
-                    const region = regionMatch ? regionMatch[1].trim() : "";
-                    const ratio = ratioMatch ? ratioMatch[1].trim() : (notes && !notes.includes("Bölge:") ? notes : "");
+                    const { region, ratio } = parseNotes(entry.notes);
+                    const isEditing = editingEntry === entry.id;
                     
                     return (
                       <TableRow key={entry.id} data-testid={`row-entry-${entry.id}`}>
@@ -402,10 +488,93 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
                         </TableCell>
                         <TableCell>{entry.workItem?.name || "-"}</TableCell>
                         <TableCell>{entry.workItem?.unit || "-"}</TableCell>
-                        <TableCell className="text-right">{entry.quantity}</TableCell>
-                        <TableCell className="text-right">{entry.manHours}</TableCell>
-                        <TableCell className="text-muted-foreground">{ratio || "-"}</TableCell>
-                        <TableCell className="text-muted-foreground">{region || "-"}</TableCell>
+                        <TableCell className="text-right">
+                          {isEditing ? (
+                            <Input
+                              type="number"
+                              value={editValues.quantity}
+                              onChange={(e) => setEditValues({ ...editValues, quantity: Number(e.target.value) })}
+                              className="w-20 text-right"
+                              data-testid={`input-edit-quantity-${entry.id}`}
+                            />
+                          ) : (
+                            entry.quantity
+                          )}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {isEditing ? (
+                            <Input
+                              type="text"
+                              value={editValues.ratio}
+                              onChange={(e) => setEditValues({ ...editValues, ratio: e.target.value })}
+                              className="w-20"
+                              data-testid={`input-edit-ratio-${entry.id}`}
+                            />
+                          ) : (
+                            ratio || "-"
+                          )}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {isEditing ? (
+                            <Input
+                              type="text"
+                              value={editValues.region}
+                              onChange={(e) => setEditValues({ ...editValues, region: e.target.value })}
+                              className="w-24"
+                              data-testid={`input-edit-region-${entry.id}`}
+                            />
+                          ) : (
+                            region || "-"
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            {isEditing ? (
+                              <>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => saveEditing(entry.id)}
+                                  disabled={updateMutation.isPending}
+                                  data-testid={`button-save-${entry.id}`}
+                                >
+                                  {updateMutation.isPending ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Check className="h-4 w-4 text-green-600" />
+                                  )}
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={cancelEditing}
+                                  data-testid={`button-cancel-${entry.id}`}
+                                >
+                                  <X className="h-4 w-4 text-muted-foreground" />
+                                </Button>
+                              </>
+                            ) : (
+                              <>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => startEditing(entry)}
+                                  data-testid={`button-edit-${entry.id}`}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => setDeleteEntryId(entry.id)}
+                                  data-testid={`button-delete-${entry.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </TableCell>
                       </TableRow>
                     );
                   })}
@@ -428,6 +597,23 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
         onConfirm={handleValidationConfirm}
         title={uploadType === 'progress' ? "İmalat İlerlemesi Doğrulama" : "Adam-Saat Doğrulama"}
       />
+
+      <AlertDialog open={deleteEntryId !== null} onOpenChange={(open) => !open && setDeleteEntryId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Kaydı Sil</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bu kaydı silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">İptal</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} data-testid="button-confirm-delete">
+              Sil
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
