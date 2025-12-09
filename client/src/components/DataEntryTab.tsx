@@ -377,12 +377,12 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
                 <FileSpreadsheet className="h-4 w-4 mr-2" />
                 Şablon İndir
               </Button>
-              <div className="relative">
+              <label className="relative inline-block cursor-pointer">
                 <input
                   type="file"
                   accept=".xlsx,.xls"
                   onChange={handleFileUpload}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  className="sr-only"
                   disabled={isUploading || bulkUploadMutation.isPending}
                   data-testid="input-bulk-upload"
                 />
@@ -390,15 +390,18 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
                   type="button"
                   variant="secondary"
                   disabled={isUploading || bulkUploadMutation.isPending}
+                  asChild
                 >
-                  {isUploading || bulkUploadMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Upload className="h-4 w-4 mr-2" />
-                  )}
-                  Excel Yükle
+                  <span>
+                    {isUploading || bulkUploadMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Upload className="h-4 w-4 mr-2" />
+                    )}
+                    Excel Yükle
+                  </span>
                 </Button>
-              </div>
+              </label>
             </div>
 
             <div className="pt-4 border-t">

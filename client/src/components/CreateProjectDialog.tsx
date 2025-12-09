@@ -340,12 +340,12 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
                         <FileSpreadsheet className="h-4 w-4 mr-2" />
                         Şablon İndir
                       </Button>
-                      <div className="relative">
+                      <label className="relative inline-block cursor-pointer">
                         <input
                           type="file"
                           accept=".xlsx,.xls"
                           onChange={handleFileUpload}
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                          className="sr-only"
                           disabled={isUploading}
                           data-testid="input-excel-upload"
                         />
@@ -353,15 +353,18 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
                           type="button"
                           variant="secondary"
                           disabled={isUploading}
+                          asChild
                         >
-                          {isUploading ? (
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          ) : (
-                            <Upload className="h-4 w-4 mr-2" />
-                          )}
-                          Excel Yükle
+                          <span>
+                            {isUploading ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <Upload className="h-4 w-4 mr-2" />
+                            )}
+                            Excel Yükle
+                          </span>
                         </Button>
-                      </div>
+                      </label>
                     </div>
 
                     {workItems.length > 0 && (
