@@ -115,8 +115,13 @@ export async function registerRoutes(
   app.post("/api/projects", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
+      const body = { ...req.body };
+      
+      if (body.startDate === "") body.startDate = null;
+      if (body.endDate === "") body.endDate = null;
+      
       const parsed = insertProjectSchema.parse({
-        ...req.body,
+        ...body,
         createdBy: userId,
       });
       
@@ -141,7 +146,11 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Project not found" });
       }
       
-      const updated = await storage.updateProject(projectId, req.body);
+      const body = { ...req.body };
+      if (body.startDate === "") body.startDate = null;
+      if (body.endDate === "") body.endDate = null;
+      
+      const updated = await storage.updateProject(projectId, body);
       res.json(updated);
     } catch (error) {
       console.error("Error updating project:", error);
