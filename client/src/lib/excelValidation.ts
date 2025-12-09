@@ -33,6 +33,20 @@ const dailyEntryRowSchema = z.object({
 
 export type DailyEntryRow = z.infer<typeof dailyEntryRowSchema>;
 
+export interface WorkProgressRow {
+  workItemId: string;
+  entryDate: string;
+  quantity: number;
+  ratio?: string;
+  region?: string;
+}
+
+export interface ManHoursRow {
+  workItemId: string;
+  entryDate: string;
+  manHours: number;
+}
+
 export function validateWorkItems(
   jsonData: Record<string, unknown>[]
 ): ValidationResult<WorkItemRow> {
@@ -121,6 +135,168 @@ export function validateWorkItems(
       unit,
       targetQuantity,
       targetManHours,
+    });
+  });
+
+  return { validItems, errors, warnings };
+}
+
+export function validateWorkProgress(
+  jsonData: Record<string, unknown>[],
+  workItemMap: Map<string, string>
+): ValidationResult<WorkProgressRow> {
+  const validItems: WorkProgressRow[] = [];
+  const errors: ValidationError[] = [];
+  const warnings: string[] = [];
+
+  if (jsonData.length === 0) {
+    warnings.push("Excel dosyası boş veya okunamadı.");
+    return { validItems, errors, warnings };
+  }
+
+  const firstRow = jsonData[0];
+  const expectedColumns = ["Tarih", "Bütçe Kodu", "İmalat Kalemi", "Birim", "Miktar"];
+  
+  const hasExpectedColumns = expectedColumns.some(col => col in firstRow);
+  
+  if (!hasExpectedColumns) {
+    warnings.push(
+      "Excel dosyasında beklenen sütunlar bulunamadı. Beklenen sütunlar: " +
+      expectedColumns.join(", ")
+    );
+  }
+
+  const availableBudgetCodes = Array.from(workItemMap.keys());
+
+  jsonData.forEach((row, index) => {
+    const rowNum = index + 2;
+
+    const entryDateRaw = row["Tarih"] ?? row["entryDate"] ?? "";
+    const budgetCodeRaw = row["Bütçe Kodu"] ?? row["budgetCode"] ?? "";
+    const quantityRaw = row["Miktar"] ?? row["quantity"];
+    const ratioRaw = row["Oranlar"] ?? row["ratio"] ?? "";
+    const regionRaw = row["İmalat Bölgesi"] ?? row["region"] ?? "";
+
+    const budgetCode = String(budgetCodeRaw).trim();
+    const workItemId = workItemMap.get(budgetCode);
+
+    if (!budgetCode) {
+      errors.push({
+        row: rowNum,
+        field: "Bütçe Kodu",
+        value: budgetCodeRaw,
+        message: "Bütçe kodu boş olamaz",
+      });
+      return;
+    }
+
+    if (!workItemId) {
+      errors.push({
+        row: rowNum,
+        field: "Bütçe Kodu",
+        value: budgetCode,
+        message: `"${budgetCode}" bütçe kodu bu projede tanımlı değil. Mevcut kodlar: ${availableBudgetCodes.slice(0, 5).join(", ")}${availableBudgetCodes.length > 5 ? "..." : ""}`,
+      });
+      return;
+    }
+
+    const entryDate = parseDateSafe(entryDateRaw, rowNum, errors);
+    if (!entryDate) return;
+
+    const quantity = parseNumberSafe(quantityRaw, "Miktar", rowNum, errors);
+
+    if (quantity === null) return;
+
+    if (quantity === 0) {
+      warnings.push(`Satır ${rowNum}: Miktar değeri sıfır, kayıt yoksayılıyor.`);
+      return;
+    }
+
+    validItems.push({
+      workItemId,
+      entryDate,
+      quantity,
+      ratio: String(ratioRaw).trim() || undefined,
+      region: String(regionRaw).trim() || undefined,
+    });
+  });
+
+  return { validItems, errors, warnings };
+}
+
+export function validateManHours(
+  jsonData: Record<string, unknown>[],
+  workItemMap: Map<string, string>
+): ValidationResult<ManHoursRow> {
+  const validItems: ManHoursRow[] = [];
+  const errors: ValidationError[] = [];
+  const warnings: string[] = [];
+
+  if (jsonData.length === 0) {
+    warnings.push("Excel dosyası boş veya okunamadı.");
+    return { validItems, errors, warnings };
+  }
+
+  const firstRow = jsonData[0];
+  const expectedColumns = ["Tarih", "Bütçe Kodu", "İmalat Kalemi", "Birim", "Miktar"];
+  
+  const hasExpectedColumns = expectedColumns.some(col => col in firstRow);
+  
+  if (!hasExpectedColumns) {
+    warnings.push(
+      "Excel dosyasında beklenen sütunlar bulunamadı. Beklenen sütunlar: " +
+      expectedColumns.join(", ")
+    );
+  }
+
+  const availableBudgetCodes = Array.from(workItemMap.keys());
+
+  jsonData.forEach((row, index) => {
+    const rowNum = index + 2;
+
+    const entryDateRaw = row["Tarih"] ?? row["entryDate"] ?? "";
+    const budgetCodeRaw = row["Bütçe Kodu"] ?? row["budgetCode"] ?? "";
+    const manHoursRaw = row["Miktar"] ?? row["manHours"];
+
+    const budgetCode = String(budgetCodeRaw).trim();
+    const workItemId = workItemMap.get(budgetCode);
+
+    if (!budgetCode) {
+      errors.push({
+        row: rowNum,
+        field: "Bütçe Kodu",
+        value: budgetCodeRaw,
+        message: "Bütçe kodu boş olamaz",
+      });
+      return;
+    }
+
+    if (!workItemId) {
+      errors.push({
+        row: rowNum,
+        field: "Bütçe Kodu",
+        value: budgetCode,
+        message: `"${budgetCode}" bütçe kodu bu projede tanımlı değil. Mevcut kodlar: ${availableBudgetCodes.slice(0, 5).join(", ")}${availableBudgetCodes.length > 5 ? "..." : ""}`,
+      });
+      return;
+    }
+
+    const entryDate = parseDateSafe(entryDateRaw, rowNum, errors);
+    if (!entryDate) return;
+
+    const manHours = parseNumberSafe(manHoursRaw, "Miktar (Adam-Saat)", rowNum, errors);
+
+    if (manHours === null) return;
+
+    if (manHours === 0) {
+      warnings.push(`Satır ${rowNum}: Adam-saat değeri sıfır, kayıt yoksayılıyor.`);
+      return;
+    }
+
+    validItems.push({
+      workItemId,
+      entryDate,
+      manHours,
     });
   });
 

@@ -309,14 +309,37 @@ export async function registerRoutes(
       }
       
       const items = req.body.entries as any[];
+      const uploadType = req.body.type as string; // 'progress' or 'manhours'
       
-      const parsedEntries = items.map((entry) =>
-        insertDailyEntrySchema.parse({
-          ...entry,
-          projectId,
-          enteredBy: userId,
-        })
-      );
+      const parsedEntries = items.map((entry) => {
+        if (uploadType === 'progress') {
+          return insertDailyEntrySchema.parse({
+            workItemId: entry.workItemId,
+            entryDate: entry.entryDate,
+            quantity: entry.quantity,
+            manHours: 0,
+            notes: entry.region ? `Bölge: ${entry.region}${entry.ratio ? `, Oran: ${entry.ratio}` : ''}` : (entry.ratio || ''),
+            projectId,
+            enteredBy: userId,
+          });
+        } else if (uploadType === 'manhours') {
+          return insertDailyEntrySchema.parse({
+            workItemId: entry.workItemId,
+            entryDate: entry.entryDate,
+            manHours: entry.manHours,
+            quantity: 0,
+            notes: '',
+            projectId,
+            enteredBy: userId,
+          });
+        } else {
+          return insertDailyEntrySchema.parse({
+            ...entry,
+            projectId,
+            enteredBy: userId,
+          });
+        }
+      });
       
       const entries = await storage.createDailyEntries(parsedEntries);
       res.status(201).json(entries);
