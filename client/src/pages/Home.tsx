@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Plus,
   Clock,
@@ -14,6 +15,8 @@ import {
   TrendingUp,
   Calendar,
   ArrowRight,
+  AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 import { CreateProjectDialog } from "@/components/CreateProjectDialog";
 import type { Project } from "@shared/schema";
@@ -27,7 +30,7 @@ interface ProjectWithStats extends Project {
 export default function Home() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
-  const { data: projects, isLoading } = useQuery<ProjectWithStats[]>({
+  const { data: projects, isLoading, error, refetch } = useQuery<ProjectWithStats[]>({
     queryKey: ["/api/projects/with-stats"],
   });
 
@@ -85,6 +88,18 @@ export default function Home() {
             </Card>
           ))}
         </div>
+      ) : error ? (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Hata</AlertTitle>
+          <AlertDescription className="flex flex-col gap-4">
+            <span>Projeler yüklenirken bir hata oluştu. Lütfen tekrar deneyin.</span>
+            <Button variant="outline" size="sm" onClick={() => refetch()} className="w-fit" data-testid="button-retry-projects">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Tekrar Dene
+            </Button>
+          </AlertDescription>
+        </Alert>
       ) : projects && projects.length > 0 ? (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">

@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   ArrowLeft,
   Users,
@@ -16,6 +17,8 @@ import {
   TrendingUp,
   FileSpreadsheet,
   BarChart3,
+  AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 import { DataEntryTab } from "@/components/DataEntryTab";
 import { ReportsTab } from "@/components/ReportsTab";
@@ -34,8 +37,8 @@ export default function ProjectDetail() {
   const params = useParams<{ id: string }>();
   const [activeTab, setActiveTab] = useState("overview");
 
-  const { data: project, isLoading } = useQuery<ProjectWithDetails>({
-    queryKey: ["/api/projects", params.id],
+  const { data: project, isLoading, error, refetch } = useQuery<ProjectWithDetails>({
+    queryKey: [`/api/projects/${params.id}`],
     enabled: !!params.id,
   });
 
@@ -73,6 +76,32 @@ export default function ProjectDetail() {
           ))}
         </div>
         <Skeleton className="h-96" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 max-w-7xl mx-auto">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Hata</AlertTitle>
+          <AlertDescription className="flex flex-col gap-4">
+            <span>Proje yüklenirken bir hata oluştu. Lütfen tekrar deneyin.</span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => refetch()} data-testid="button-retry">
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Tekrar Dene
+              </Button>
+              <Link href="/">
+                <Button variant="ghost" size="sm">
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Ana Sayfaya Dön
+                </Button>
+              </Link>
+            </div>
+          </AlertDescription>
+        </Alert>
       </div>
     );
   }
