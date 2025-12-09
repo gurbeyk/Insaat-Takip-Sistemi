@@ -215,14 +215,24 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
       return;
     }
 
-    const exportData = entries.map((entry) => ({
-      "Bütçe Kodu": entry.workItem?.budgetCode || "",
-      "İmalat Kalemi": entry.workItem?.name || "",
-      "Tarih": entry.entryDate,
-      "Adam-Saat": entry.manHours,
-      "Miktar": entry.quantity,
-      "Notlar": entry.notes || "",
-    }));
+    const exportData = entries.map((entry) => {
+      const notes = entry.notes || "";
+      const regionMatch = notes.match(/Bölge:\s*([^,]+)/);
+      const ratioMatch = notes.match(/Oran:\s*([^,]+)/);
+      const region = regionMatch ? regionMatch[1].trim() : "";
+      const ratio = ratioMatch ? ratioMatch[1].trim() : (notes && !notes.includes("Bölge:") ? notes : "");
+      
+      return {
+        "Tarih": entry.entryDate,
+        "Bütçe Kodu": entry.workItem?.budgetCode || "",
+        "İmalat Kalemi": entry.workItem?.name || "",
+        "Birim": entry.workItem?.unit || "",
+        "Miktar": entry.quantity,
+        "Adam-Saat": entry.manHours,
+        "Oranlar": ratio,
+        "İmalat Bölgesi": region,
+      };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
@@ -367,28 +377,38 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
                     <TableHead>Tarih</TableHead>
                     <TableHead>Bütçe Kodu</TableHead>
                     <TableHead>İmalat Kalemi</TableHead>
-                    <TableHead className="text-right">Adam-Saat</TableHead>
+                    <TableHead>Birim</TableHead>
                     <TableHead className="text-right">Miktar</TableHead>
-                    <TableHead>Notlar</TableHead>
+                    <TableHead className="text-right">Adam-Saat</TableHead>
+                    <TableHead>Oranlar</TableHead>
+                    <TableHead>İmalat Bölgesi</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {entries.slice(0, 20).map((entry) => (
-                    <TableRow key={entry.id} data-testid={`row-entry-${entry.id}`}>
-                      <TableCell>
-                        {new Date(entry.entryDate).toLocaleDateString("tr-TR")}
-                      </TableCell>
-                      <TableCell className="font-mono text-sm">
-                        {entry.workItem?.budgetCode}
-                      </TableCell>
-                      <TableCell>{entry.workItem?.name}</TableCell>
-                      <TableCell className="text-right">{entry.manHours}</TableCell>
-                      <TableCell className="text-right">{entry.quantity}</TableCell>
-                      <TableCell className="text-muted-foreground truncate max-w-[200px]">
-                        {entry.notes || "-"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {entries.slice(0, 20).map((entry) => {
+                    const notes = entry.notes || "";
+                    const regionMatch = notes.match(/Bölge:\s*([^,]+)/);
+                    const ratioMatch = notes.match(/Oran:\s*([^,]+)/);
+                    const region = regionMatch ? regionMatch[1].trim() : "";
+                    const ratio = ratioMatch ? ratioMatch[1].trim() : (notes && !notes.includes("Bölge:") ? notes : "");
+                    
+                    return (
+                      <TableRow key={entry.id} data-testid={`row-entry-${entry.id}`}>
+                        <TableCell>
+                          {new Date(entry.entryDate).toLocaleDateString("tr-TR")}
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">
+                          {entry.workItem?.budgetCode || "-"}
+                        </TableCell>
+                        <TableCell>{entry.workItem?.name || "-"}</TableCell>
+                        <TableCell>{entry.workItem?.unit || "-"}</TableCell>
+                        <TableCell className="text-right">{entry.quantity}</TableCell>
+                        <TableCell className="text-right">{entry.manHours}</TableCell>
+                        <TableCell className="text-muted-foreground">{ratio || "-"}</TableCell>
+                        <TableCell className="text-muted-foreground">{region || "-"}</TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
