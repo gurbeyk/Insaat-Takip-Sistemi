@@ -27,6 +27,8 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { FileSpreadsheet, Upload, Loader2 } from "lucide-react";
 import * as XLSX from "xlsx";
+import { validateWorkItems, formatValidationSummary, type WorkItemRow, type ValidationResult } from "@/lib/excelValidation";
+import { ValidationResultDialog } from "./ValidationResultDialog";
 
 const projectFormSchema = z.object({
   name: z.string().min(1, "Proje adı zorunludur"),
@@ -40,14 +42,6 @@ const projectFormSchema = z.object({
 
 type ProjectFormValues = z.infer<typeof projectFormSchema>;
 
-interface WorkItemRow {
-  budgetCode: string;
-  name: string;
-  unit: string;
-  targetQuantity: number;
-  targetManHours: number;
-}
-
 interface CreateProjectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -58,6 +52,10 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
   const [activeTab, setActiveTab] = useState("details");
   const [workItems, setWorkItems] = useState<WorkItemRow[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [validationResult, setValidationResult] = useState<ValidationResult<WorkItemRow> | null>(null);
+  const [showValidation, setShowValidation] = useState(false);
+  const [pendingItems, setPendingItems] = useState<WorkItemRow[]>([]);
+  const [totalRows, setTotalRows] = useState(0);
 
   const form = useForm<ProjectFormValues>({
     resolver: zodResolver(projectFormSchema),
@@ -109,31 +107,47 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
       const worksheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet);
 
-      const parsedItems: WorkItemRow[] = jsonData.map((row) => ({
-        budgetCode: String(row["Bütçe Kodu"] || row["budgetCode"] || ""),
-        name: String(row["İmalat Kalemi"] || row["name"] || ""),
-        unit: String(row["Birim"] || row["unit"] || ""),
-        targetQuantity: Number(row["Hedef Miktar"] || row["targetQuantity"] || 0),
-        targetManHours: Number(row["Hedef Adam-Saat"] || row["targetManHours"] || 0),
-      }));
+      const result = validateWorkItems(jsonData);
+      setTotalRows(jsonData.length);
+      setValidationResult(result);
+      setPendingItems(result.validItems);
 
-      setWorkItems(parsedItems);
-      
-      const totalManHours = parsedItems.reduce((sum, item) => sum + item.targetManHours, 0);
-      form.setValue("plannedManHours", totalManHours);
-
-      toast({
-        title: "Dosya Yüklendi",
-        description: `${parsedItems.length} imalat kalemi başarıyla yüklendi.`,
-      });
+      if (result.errors.length > 0 || result.warnings.length > 0) {
+        setShowValidation(true);
+      } else if (result.validItems.length > 0) {
+        applyWorkItems(result.validItems);
+      } else {
+        toast({
+          title: "Uyarı",
+          description: "Geçerli veri bulunamadı. Şablon formatını kontrol edin.",
+          variant: "destructive",
+        });
+      }
     } catch {
       toast({
         title: "Hata",
-        description: "Excel dosyası okunurken bir hata oluştu.",
+        description: "Excel dosyası okunurken bir hata oluştu. Dosya formatını kontrol edin.",
         variant: "destructive",
       });
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const applyWorkItems = (items: WorkItemRow[]) => {
+    setWorkItems(items);
+    const totalManHours = items.reduce((sum, item) => sum + item.targetManHours, 0);
+    form.setValue("plannedManHours", totalManHours);
+    toast({
+      title: "Dosya Yüklendi",
+      description: formatValidationSummary(validationResult || { validItems: items, errors: [], warnings: [] }, totalRows || items.length),
+    });
+    setShowValidation(false);
+  };
+
+  const handleValidationConfirm = () => {
+    if (pendingItems.length > 0) {
+      applyWorkItems(pendingItems);
     }
   };
 
@@ -409,6 +423,15 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
           </form>
         </Form>
       </DialogContent>
+
+      <ValidationResultDialog
+        open={showValidation}
+        onOpenChange={setShowValidation}
+        result={validationResult}
+        totalRows={totalRows}
+        onConfirm={handleValidationConfirm}
+        title="İmalat Kalemleri Doğrulama"
+      />
     </Dialog>
   );
 }

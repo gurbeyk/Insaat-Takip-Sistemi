@@ -36,6 +36,8 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { FileSpreadsheet, Plus, Upload, Loader2, Download } from "lucide-react";
 import * as XLSX from "xlsx";
 import type { Project, WorkItem, DailyEntry } from "@shared/schema";
+import { validateDailyEntries, formatValidationSummary, type DailyEntryRow, type ValidationResult } from "@/lib/excelValidation";
+import { ValidationResultDialog } from "./ValidationResultDialog";
 
 const dailyEntrySchema = z.object({
   workItemId: z.string().min(1, "İmalat kalemi seçiniz"),
@@ -54,6 +56,10 @@ interface DataEntryTabProps {
 export function DataEntryTab({ project }: DataEntryTabProps) {
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
+  const [validationResult, setValidationResult] = useState<ValidationResult<DailyEntryRow> | null>(null);
+  const [showValidation, setShowValidation] = useState(false);
+  const [pendingEntries, setPendingEntries] = useState<DailyEntryRow[]>([]);
+  const [totalRows, setTotalRows] = useState(0);
 
   const { data: entries, isLoading: entriesLoading } = useQuery<(DailyEntry & { workItem?: WorkItem })[]>({
     queryKey: ["/api/projects", project.id, "entries"],
@@ -137,39 +143,41 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
         (project.workItems || []).map((item) => [item.budgetCode, item.id])
       );
 
-      const parsedEntries: DailyEntryFormValues[] = jsonData
-        .map((row) => {
-          const budgetCode = String(row["Bütçe Kodu"] || row["budgetCode"] || "");
-          const workItemId = workItemMap.get(budgetCode);
-          if (!workItemId) return null;
+      const result = validateDailyEntries(jsonData, workItemMap);
+      setTotalRows(jsonData.length);
+      setValidationResult(result);
+      setPendingEntries(result.validItems);
 
-          return {
-            workItemId,
-            entryDate: String(row["Tarih"] || row["entryDate"] || new Date().toISOString().split("T")[0]),
-            manHours: Number(row["Adam-Saat"] || row["manHours"] || 0),
-            quantity: Number(row["Miktar"] || row["quantity"] || 0),
-            notes: String(row["Notlar"] || row["notes"] || ""),
-          };
-        })
-        .filter((entry): entry is DailyEntryFormValues => entry !== null);
-
-      if (parsedEntries.length > 0) {
-        bulkUploadMutation.mutate(parsedEntries);
+      if (result.errors.length > 0 || result.warnings.length > 0) {
+        setShowValidation(true);
+      } else if (result.validItems.length > 0) {
+        submitEntries(result.validItems);
       } else {
         toast({
           title: "Uyarı",
-          description: "Geçerli veri bulunamadı. Bütçe kodlarını kontrol edin.",
+          description: "Geçerli veri bulunamadı. Bütçe kodlarını ve tarih formatlarını kontrol edin.",
           variant: "destructive",
         });
       }
     } catch {
       toast({
         title: "Hata",
-        description: "Excel dosyası okunurken bir hata oluştu.",
+        description: "Excel dosyası okunurken bir hata oluştu. Dosya formatını kontrol edin.",
         variant: "destructive",
       });
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const submitEntries = (items: DailyEntryRow[]) => {
+    bulkUploadMutation.mutate(items);
+    setShowValidation(false);
+  };
+
+  const handleValidationConfirm = () => {
+    if (pendingEntries.length > 0) {
+      submitEntries(pendingEntries);
     }
   };
 
@@ -463,6 +471,15 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
           )}
         </CardContent>
       </Card>
+
+      <ValidationResultDialog
+        open={showValidation}
+        onOpenChange={setShowValidation}
+        result={validationResult}
+        totalRows={totalRows}
+        onConfirm={handleValidationConfirm}
+        title="Günlük Veri Doğrulama"
+      />
     </div>
   );
 }
