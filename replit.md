@@ -87,3 +87,14 @@ Preferred communication style: Simple, everyday language.
 
 ### Charting
 - **Recharts**: Data visualization for reports (line, bar, area charts)
+
+## Future Enhancements
+
+### Email Notifications (Not Configured)
+- Email notification feature was skipped during development
+- To enable email notifications in the future:
+  1. Set up SendGrid integration via Replit integrations
+  2. Implement notification endpoints for:
+     - Target exceedance alerts
+     - Delay warnings
+     - Weekly summary reports
