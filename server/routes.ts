@@ -116,6 +116,8 @@ export async function registerRoutes(
     try {
       const userId = req.user.claims.sub;
       const body = { ...req.body };
+      const workItems = body.workItems || [];
+      delete body.workItems;
       
       if (body.startDate === "") body.startDate = null;
       if (body.endDate === "") body.endDate = null;
@@ -126,6 +128,22 @@ export async function registerRoutes(
       });
       
       const project = await storage.createProject(parsed);
+      
+      // Create work items if provided
+      if (workItems.length > 0) {
+        for (const item of workItems) {
+          const workItemData = insertWorkItemSchema.parse({
+            projectId: project.id,
+            budgetCode: item.budgetCode,
+            name: item.name,
+            unit: item.unit,
+            targetQuantity: item.targetQuantity,
+            targetManHours: item.targetManHours,
+          });
+          await storage.createWorkItem(workItemData);
+        }
+      }
+      
       res.status(201).json(project);
     } catch (error) {
       console.error("Error creating project:", error);
