@@ -614,5 +614,152 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/projects/:id/reports", isAuthenticated, async (req: any, res) => {
+    try {
+      const projectId = req.params.id;
+      const userId = req.user.claims.sub;
+      const { startDate, endDate } = req.query;
+      
+      const project = await storage.getProjectForUser(projectId, userId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      let entries;
+      if (startDate && endDate) {
+        entries = await storage.getDailyEntriesByDateRange(projectId, startDate as string, endDate as string);
+      } else {
+        entries = await storage.getDailyEntries(projectId);
+      }
+      
+      const workItems = await storage.getWorkItems(projectId);
+      const schedule = await storage.getMonthlySchedule(projectId);
+      
+      const dailyData: Record<string, { manHours: number; quantity: number; target: number }> = {};
+      entries.forEach((entry) => {
+        const date = entry.entryDate;
+        if (!dailyData[date]) {
+          dailyData[date] = { manHours: 0, quantity: 0, target: 0 };
+        }
+        dailyData[date].manHours += entry.manHours || 0;
+        dailyData[date].quantity += entry.quantity || 0;
+      });
+      
+      const totalPlannedManHours = project.plannedManHours || 0;
+      const totalDays = project.duration || 1;
+      const dailyTarget = totalPlannedManHours / totalDays;
+      
+      const daily = Object.entries(dailyData)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, data]) => ({
+          date,
+          manHours: data.manHours,
+          quantity: data.quantity,
+          target: dailyTarget,
+        }));
+      
+      const weeklyData: Record<string, { manHours: number; quantity: number; target: number }> = {};
+      daily.forEach((item) => {
+        const date = new Date(item.date);
+        const weekStart = new Date(date);
+        weekStart.setDate(date.getDate() - date.getDay() + 1);
+        const weekKey = `${weekStart.getFullYear()}-W${String(Math.ceil((weekStart.getDate() + new Date(weekStart.getFullYear(), 0, 1).getDay()) / 7)).padStart(2, "0")}`;
+        
+        if (!weeklyData[weekKey]) {
+          weeklyData[weekKey] = { manHours: 0, quantity: 0, target: 0 };
+        }
+        weeklyData[weekKey].manHours += item.manHours;
+        weeklyData[weekKey].quantity += item.quantity;
+        weeklyData[weekKey].target += dailyTarget;
+      });
+      
+      const weekly = Object.entries(weeklyData)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([week, data]) => ({
+          week,
+          manHours: data.manHours,
+          quantity: data.quantity,
+          target: data.target,
+        }));
+      
+      const monthlyData: Record<string, { manHours: number; quantity: number; target: number }> = {};
+      schedule.forEach((s) => {
+        const monthKey = `${s.year}-${String(s.month).padStart(2, "0")}`;
+        if (!monthlyData[monthKey]) {
+          monthlyData[monthKey] = { manHours: 0, quantity: 0, target: s.plannedManHours || 0 };
+        } else {
+          monthlyData[monthKey].target = s.plannedManHours || 0;
+        }
+      });
+      
+      daily.forEach((item) => {
+        const monthKey = item.date.substring(0, 7);
+        if (!monthlyData[monthKey]) {
+          monthlyData[monthKey] = { manHours: 0, quantity: 0, target: 0 };
+        }
+        monthlyData[monthKey].manHours += item.manHours;
+        monthlyData[monthKey].quantity += item.quantity;
+      });
+      
+      const monthly = Object.entries(monthlyData)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([month, data]) => ({
+          month,
+          manHours: data.manHours,
+          quantity: data.quantity,
+          target: data.target,
+        }));
+      
+      let cumulativeManHours = 0;
+      let cumulativeQuantity = 0;
+      let cumulativeTarget = 0;
+      const cumulative = daily.map((item) => {
+        cumulativeManHours += item.manHours;
+        cumulativeQuantity += item.quantity;
+        cumulativeTarget += dailyTarget;
+        return {
+          date: item.date,
+          cumulativeManHours,
+          cumulativeQuantity,
+          cumulativeTarget,
+        };
+      });
+      
+      const workItemStats = workItems.map((wi) => {
+        const wiEntries = entries.filter((e) => e.workItemId === wi.id);
+        const totalManHours = wiEntries.reduce((sum, e) => sum + (e.manHours || 0), 0);
+        const totalQuantity = wiEntries.reduce((sum, e) => sum + (e.quantity || 0), 0);
+        return {
+          id: wi.id,
+          budgetCode: wi.budgetCode,
+          name: wi.name,
+          unit: wi.unit,
+          targetQuantity: wi.targetQuantity || 0,
+          targetManHours: wi.targetManHours || 0,
+          actualQuantity: totalQuantity,
+          actualManHours: totalManHours,
+          progressPercent: (wi.targetQuantity || 0) > 0 ? (totalQuantity / (wi.targetQuantity || 1)) * 100 : 0,
+        };
+      });
+      
+      res.json({
+        daily,
+        weekly,
+        monthly,
+        cumulative,
+        workItems: workItemStats,
+        summary: {
+          totalPlannedManHours: project.plannedManHours || 0,
+          totalSpentManHours: entries.reduce((sum, e) => sum + (e.manHours || 0), 0),
+          totalPlannedConcrete: project.totalConcrete || 0,
+          totalQuantity: entries.reduce((sum, e) => sum + (e.quantity || 0), 0),
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching reports:", error);
+      res.status(500).json({ message: "Failed to fetch reports" });
+    }
+  });
+
   return httpServer;
 }
