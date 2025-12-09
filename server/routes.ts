@@ -284,7 +284,16 @@ export async function registerRoutes(
         entries = await storage.getDailyEntries(projectId);
       }
       
-      res.json(entries);
+      // Get workItems to include in entries
+      const workItems = await storage.getWorkItems(projectId);
+      const workItemMap = new Map(workItems.map(wi => [wi.id, wi]));
+      
+      const entriesWithWorkItems = entries.map(entry => ({
+        ...entry,
+        workItem: workItemMap.get(entry.workItemId) || null,
+      }));
+      
+      res.json(entriesWithWorkItems);
     } catch (error) {
       console.error("Error fetching entries:", error);
       res.status(500).json({ message: "Failed to fetch entries" });
