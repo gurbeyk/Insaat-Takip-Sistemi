@@ -238,9 +238,11 @@ export default function ProjectDetail() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-2xl font-bold truncate">
-                  {project.workItems?.length || 0}
+                  {project.pouredConcrete && project.pouredConcrete > 0
+                    ? ((project.spentManHours || 0) / project.pouredConcrete).toFixed(2)
+                    : "-"}
                 </p>
-                <p className="text-sm text-muted-foreground">İmalat Kalemi</p>
+                <p className="text-sm text-muted-foreground">İlerleme Birim A-S</p>
               </div>
             </div>
             <div className="mt-3">
@@ -294,6 +296,14 @@ export default function ProjectDetail() {
                     <p className="font-semibold">{(project.totalConcrete || 0).toLocaleString("tr-TR")} m³</p>
                   </div>
                   <div>
+                    <p className="text-sm text-muted-foreground">Planlanan Birim A-S</p>
+                    <p className="font-semibold">
+                      {project.totalConcrete && project.totalConcrete > 0
+                        ? ((project.plannedManHours || 0) / project.totalConcrete).toFixed(2)
+                        : "-"}
+                    </p>
+                  </div>
+                  <div>
                     <p className="text-sm text-muted-foreground">Başlangıç Tarihi</p>
                     <p className="font-semibold">
                       {project.startDate
@@ -304,8 +314,12 @@ export default function ProjectDetail() {
                   <div>
                     <p className="text-sm text-muted-foreground">Bitiş Tarihi</p>
                     <p className="font-semibold">
-                      {project.endDate
-                        ? new Date(project.endDate).toLocaleDateString("tr-TR")
+                      {project.startDate && project.totalDuration
+                        ? (() => {
+                            const start = new Date(project.startDate);
+                            start.setDate(start.getDate() + project.totalDuration);
+                            return start.toLocaleDateString("tr-TR");
+                          })()
                         : "-"}
                     </p>
                   </div>
@@ -332,9 +346,14 @@ export default function ProjectDetail() {
                           <p className="text-sm font-medium">{item.name}</p>
                           <p className="text-xs text-muted-foreground">{item.budgetCode}</p>
                         </div>
-                        <Badge variant="outline" size="sm">
-                          {item.targetManHours} A-S
-                        </Badge>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">
+                            {item.targetQuantity} {item.unit}
+                          </Badge>
+                          <Badge variant="outline">
+                            {item.targetManHours} A-S
+                          </Badge>
+                        </div>
                       </div>
                     ))}
                     {project.workItems.length > 5 && (

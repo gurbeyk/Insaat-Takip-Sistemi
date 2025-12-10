@@ -47,8 +47,10 @@ export async function registerRoutes(
       const projectsWithStats = await Promise.all(
         projects.map(async (project) => {
           const entries = await storage.getDailyEntries(project.id);
+          const workItems = await storage.getWorkItems(project.id);
+          const m3WorkItemIds = new Set(workItems.filter(w => w.unit === 'm3').map(w => w.id));
           const spentManHours = entries.reduce((sum, e) => sum + (e.manHours || 0), 0);
-          const pouredConcrete = entries.reduce((sum, e) => sum + (e.quantity || 0), 0);
+          const pouredConcrete = entries.reduce((sum, e) => m3WorkItemIds.has(e.workItemId) ? sum + (e.quantity || 0) : sum, 0);
           
           let elapsedDays = 0;
           if (project.startDate) {
@@ -87,8 +89,9 @@ export async function registerRoutes(
       const workItems = await storage.getWorkItems(projectId);
       const dailyEntries = await storage.getDailyEntries(projectId);
       
+      const m3WorkItemIds = new Set(workItems.filter(w => w.unit === 'm3').map(w => w.id));
       const spentManHours = dailyEntries.reduce((sum, e) => sum + (e.manHours || 0), 0);
-      const pouredConcrete = dailyEntries.reduce((sum, e) => sum + (e.quantity || 0), 0);
+      const pouredConcrete = dailyEntries.reduce((sum, e) => m3WorkItemIds.has(e.workItemId) ? sum + (e.quantity || 0) : sum, 0);
       
       let elapsedDays = 0;
       if (project.startDate) {
