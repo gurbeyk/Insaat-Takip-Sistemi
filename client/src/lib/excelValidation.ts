@@ -14,6 +14,8 @@ export interface ValidationResult<T> {
 }
 
 const workItemRowSchema = z.object({
+  parentBudgetCode: z.string().optional(),
+  category: z.string().optional(),
   budgetCode: z.string().min(1, "Bütçe kodu boş olamaz"),
   name: z.string().min(1, "İmalat kalemi adı boş olamaz"),
   unit: z.string().min(1, "Birim boş olamaz"),
@@ -78,12 +80,16 @@ export function validateWorkItems(
   jsonData.forEach((row, index) => {
     const rowNum = index + 2;
 
+    const parentBudgetCodeRaw = row["Butce kodu ust oge"] ?? row["parentBudgetCode"] ?? "";
+    const categoryRaw = row["Imalat Ayrimi"] ?? row["category"] ?? "";
     const budgetCodeRaw = row["Bütçe Kodu"] ?? row["budgetCode"] ?? "";
     const nameRaw = row["İmalat Kalemi"] ?? row["name"] ?? "";
     const unitRaw = row["Birim"] ?? row["unit"] ?? "";
     const targetQuantityRaw = row["Hedef Miktar"] ?? row["targetQuantity"];
     const targetManHoursRaw = row["Hedef Adam-Saat"] ?? row["targetManHours"];
 
+    const parentBudgetCode = String(parentBudgetCodeRaw).trim() || undefined;
+    const category = String(categoryRaw).trim() || undefined;
     const budgetCode = String(budgetCodeRaw).trim();
     const name = String(nameRaw).trim();
     const unit = String(unitRaw).trim();
@@ -130,6 +136,8 @@ export function validateWorkItems(
     seenBudgetCodes.add(budgetCode);
 
     validItems.push({
+      parentBudgetCode,
+      category,
       budgetCode,
       name,
       unit,

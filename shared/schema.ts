@@ -57,6 +57,8 @@ export const projects = pgTable("projects", {
 export const workItems = pgTable("work_items", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  parentBudgetCode: varchar("parent_budget_code"), // Bütçe kodu üst öge
+  category: varchar("category"), // İmalat ayrımı
   budgetCode: varchar("budget_code").notNull(),
   name: varchar("name").notNull(),
   unit: varchar("unit").notNull(), // m², m³, kg, adet etc.

@@ -137,6 +137,8 @@ export async function registerRoutes(
         for (const item of workItems) {
           const workItemData = insertWorkItemSchema.parse({
             projectId: project.id,
+            parentBudgetCode: item.parentBudgetCode,
+            category: item.category,
             budgetCode: item.budgetCode,
             name: item.name,
             unit: item.unit,
@@ -711,7 +713,7 @@ export async function registerRoutes(
       });
       
       const totalPlannedManHours = project.plannedManHours || 0;
-      const totalDays = project.duration || 1;
+      const totalDays = project.totalDuration || 1;
       const dailyTarget = totalPlannedManHours / totalDays;
       
       const daily = Object.entries(dailyData)
