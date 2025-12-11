@@ -820,7 +820,7 @@ export async function registerRoutes(
       // Get the last day's stats
       const lastDayStats = daily.length > 0 ? daily[daily.length - 1] : null;
       
-      const weeklyData: Record<string, { manHours: number; quantity: number; target: number; earnedManHours: number }> = {};
+      const weeklyData: Record<string, { manHours: number; quantity: number; target: number; earnedManHours: number; concrete: number; formwork: number; rebar: number }> = {};
       daily.forEach((item) => {
         const date = new Date(item.date);
         const weekStart = new Date(date);
@@ -828,12 +828,15 @@ export async function registerRoutes(
         const weekKey = `${weekStart.getFullYear()}-W${String(Math.ceil((weekStart.getDate() + new Date(weekStart.getFullYear(), 0, 1).getDay()) / 7)).padStart(2, "0")}`;
         
         if (!weeklyData[weekKey]) {
-          weeklyData[weekKey] = { manHours: 0, quantity: 0, target: 0, earnedManHours: 0 };
+          weeklyData[weekKey] = { manHours: 0, quantity: 0, target: 0, earnedManHours: 0, concrete: 0, formwork: 0, rebar: 0 };
         }
         weeklyData[weekKey].manHours += item.manHours;
         weeklyData[weekKey].quantity += item.quantity;
         weeklyData[weekKey].target += dailyTarget;
         weeklyData[weekKey].earnedManHours += item.earnedManHours;
+        weeklyData[weekKey].concrete += item.concrete;
+        weeklyData[weekKey].formwork += item.formwork;
+        weeklyData[weekKey].rebar += item.rebar;
       });
       
       const weekly = Object.entries(weeklyData)
@@ -844,7 +847,13 @@ export async function registerRoutes(
           quantity: data.quantity,
           target: data.target,
           earnedManHours: data.earnedManHours,
+          concrete: data.concrete,
+          formwork: data.formwork,
+          rebar: data.rebar,
         }));
+      
+      // Get the last week's stats
+      const lastWeekStats = weekly.length > 0 ? weekly[weekly.length - 1] : null;
       
       const monthlyData: Record<string, { manHours: number; quantity: number; target: number; earnedManHours: number }> = {};
       schedule.forEach((s) => {
@@ -989,6 +998,7 @@ export async function registerRoutes(
         cumulative,
         workItems: workItemStats,
         lastDayStats,
+        lastWeekStats,
         summary: {
           totalPlannedManHours: project.plannedManHours || 0,
           totalSpentManHours: entries.reduce((sum, e) => sum + (e.manHours || 0), 0),

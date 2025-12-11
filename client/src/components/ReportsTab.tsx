@@ -61,14 +61,26 @@ interface DailyData {
   rebar: number;
 }
 
+interface WeeklyData {
+  week: string;
+  manHours: number;
+  quantity: number;
+  target: number;
+  earnedManHours: number;
+  concrete: number;
+  formwork: number;
+  rebar: number;
+}
+
 interface ReportData {
   daily: DailyData[];
-  weekly: { week: string; manHours: number; quantity: number; target: number; earnedManHours: number }[];
+  weekly: WeeklyData[];
   monthly: { month: string; manHours: number; quantity: number; target: number; earnedManHours: number; cumulativeManHours: number; cumulativeEarnedManHours: number }[];
   monthlyConcrete: { month: string; actual: number; planned: number }[];
   cumulative: { date: string; cumulativeManHours: number; cumulativeQuantity: number; cumulativeTarget: number }[];
   workItems: WorkItemStats[];
   lastDayStats: DailyData | null;
+  lastWeekStats: WeeklyData | null;
   summary: {
     totalPlannedManHours: number;
     totalSpentManHours: number;
@@ -575,97 +587,162 @@ export function ReportsTab({ project }: ReportsTabProps) {
           </TabsContent>
 
           <TabsContent value="weekly" className="mt-6">
+            {/* Last Week Stats */}
+            {reportData?.lastWeekStats && (
+              <div className="mb-6">
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <h3 className="text-lg font-semibold">Son Hafta:</h3>
+                  <span className="text-muted-foreground">
+                    {reportData.lastWeekStats.week}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-sm text-muted-foreground">Haftalık Dökülen Beton</p>
+                      <p className="text-2xl font-bold" data-testid="text-weekly-concrete">
+                        {reportData.lastWeekStats.concrete.toLocaleString("tr-TR", { maximumFractionDigits: 2 })} m³
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-sm text-muted-foreground">Haftalık Kalıp</p>
+                      <p className="text-2xl font-bold" data-testid="text-weekly-formwork">
+                        {reportData.lastWeekStats.formwork.toLocaleString("tr-TR", { maximumFractionDigits: 2 })} m²
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-sm text-muted-foreground">Haftalık Demir</p>
+                      <p className="text-2xl font-bold" data-testid="text-weekly-rebar">
+                        {reportData.lastWeekStats.rebar.toLocaleString("tr-TR", { maximumFractionDigits: 2 })} ton
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-sm text-muted-foreground">Gerçekleşen Adam-Saat</p>
+                      <p className="text-2xl font-bold" data-testid="text-weekly-manhours">
+                        {reportData.lastWeekStats.manHours.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg">Haftalık Adam-Saat Performansı</CardTitle>
-                  <CardDescription>Haftalık toplam adam-saat verileri</CardDescription>
+                  <CardDescription>
+                    {reportData?.lastWeekStats 
+                      ? `Son ${Math.min(reportData.weekly.length, 8)} hafta verileri`
+                      : "Haftalık adam-saat verileri"}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {reportData?.weekly && reportData.weekly.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={reportData.weekly}>
-                        <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                        <XAxis
-                          dataKey="week"
-                          fontSize={12}
-                          tick={{ fill: "hsl(var(--muted-foreground))" }}
-                        />
-                        <YAxis
-                          fontSize={12}
-                          tick={{ fill: "hsl(var(--muted-foreground))" }}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: "hsl(var(--card))",
-                            border: "1px solid hsl(var(--border))",
-                            borderRadius: "8px",
-                          }}
-                        />
-                        <Legend />
-                        <Bar
-                          dataKey="manHours"
-                          name="Adam-Saat"
-                          fill={chartColors.manHours}
-                          radius={[4, 4, 0, 0]}
-                        />
-                        <Bar
-                          dataKey="target"
-                          name="Hedef"
-                          fill={chartColors.target}
-                          radius={[4, 4, 0, 0]}
-                          opacity={0.5}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                      Henüz veri bulunmuyor
-                    </div>
-                  )}
+                  {(() => {
+                    const recentWeeklyData = reportData?.weekly?.slice(-8) || [];
+                    
+                    return recentWeeklyData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={recentWeeklyData}>
+                          <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                          <XAxis
+                            dataKey="week"
+                            fontSize={12}
+                            tick={{ fill: "hsl(var(--muted-foreground))" }}
+                            tickFormatter={(w) => w.split("-W")[1] ? `H${w.split("-W")[1]}` : w}
+                          />
+                          <YAxis
+                            fontSize={12}
+                            tick={{ fill: "hsl(var(--muted-foreground))" }}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "hsl(var(--card))",
+                              border: "1px solid hsl(var(--border))",
+                              borderRadius: "8px",
+                            }}
+                          />
+                          <Legend />
+                          <Bar
+                            dataKey="manHours"
+                            name="Adam-Saat"
+                            fill={chartColors.manHours}
+                            radius={[4, 4, 0, 0]}
+                          />
+                          <Bar
+                            dataKey="target"
+                            name="Hedef"
+                            fill={chartColors.target}
+                            radius={[4, 4, 0, 0]}
+                            opacity={0.5}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                        Henüz veri bulunmuyor
+                      </div>
+                    );
+                  })()}
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">Haftalık Metraj Performansı</CardTitle>
-                  <CardDescription>Haftalık toplam metraj verileri</CardDescription>
+                  <CardTitle className="text-lg">Haftalık Beton Dökümü</CardTitle>
+                  <CardDescription>
+                    {reportData?.lastWeekStats 
+                      ? `Son ${Math.min(reportData.weekly.length, 8)} hafta beton verileri (m³)`
+                      : "Haftalık beton verileri (m³)"}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {reportData?.weekly && reportData.weekly.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={reportData.weekly}>
-                        <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                        <XAxis
-                          dataKey="week"
-                          fontSize={12}
-                          tick={{ fill: "hsl(var(--muted-foreground))" }}
-                        />
-                        <YAxis
-                          fontSize={12}
-                          tick={{ fill: "hsl(var(--muted-foreground))" }}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: "hsl(var(--card))",
-                            border: "1px solid hsl(var(--border))",
-                            borderRadius: "8px",
-                          }}
-                        />
-                        <Legend />
-                        <Bar
-                          dataKey="quantity"
-                          name="Miktar"
-                          fill={chartColors.quantity}
-                          radius={[4, 4, 0, 0]}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                      Henüz veri bulunmuyor
-                    </div>
-                  )}
+                  {(() => {
+                    const recentWeeklyData = reportData?.weekly?.slice(-8) || [];
+                    
+                    return recentWeeklyData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={recentWeeklyData}>
+                          <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                          <XAxis
+                            dataKey="week"
+                            fontSize={12}
+                            tick={{ fill: "hsl(var(--muted-foreground))" }}
+                            tickFormatter={(w) => w.split("-W")[1] ? `H${w.split("-W")[1]}` : w}
+                          />
+                          <YAxis
+                            fontSize={12}
+                            tick={{ fill: "hsl(var(--muted-foreground))" }}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "hsl(var(--card))",
+                              border: "1px solid hsl(var(--border))",
+                              borderRadius: "8px",
+                            }}
+                            formatter={(value: number) => [`${value.toLocaleString("tr-TR")} m³`, "Beton"]}
+                          />
+                          <Legend />
+                          <Bar
+                            dataKey="concrete"
+                            name="Beton (m³)"
+                            fill={chartColors.quantity}
+                            radius={[4, 4, 0, 0]}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                        Henüz veri bulunmuyor
+                      </div>
+                    );
+                  })()}
                 </CardContent>
               </Card>
             </div>
