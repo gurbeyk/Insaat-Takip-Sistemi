@@ -749,48 +749,8 @@ export function ReportsTab({ project }: ReportsTabProps) {
           </TabsContent>
 
           <TabsContent value="monthly" className="mt-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Aylık Performans Özeti</CardTitle>
-                  <CardDescription>Aylara göre performans değerlendirmesi</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {reportData?.monthly && reportData.monthly.length > 0 ? (
-                    <div className="space-y-4">
-                      {reportData.monthly.slice(-6).map((month) => {
-                        const trend = getTrend(month.manHours, month.target);
-                        const TrendIcon = trend.icon;
-                        return (
-                          <div
-                            key={month.month}
-                            className="flex items-center justify-between gap-4 p-3 rounded-lg bg-muted/50"
-                          >
-                            <div>
-                              <p className="font-medium">{formatTurkishMonth(month.month)}</p>
-                              <p className="text-sm text-muted-foreground">
-                                {month.manHours.toLocaleString("tr-TR")} / {month.target.toLocaleString("tr-TR")} A-S
-                              </p>
-                            </div>
-                            <div className={`flex items-center gap-2 ${trend.color}`}>
-                              <TrendIcon className="h-4 w-4" />
-                              <span className="text-sm">{trend.text}</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                      Henüz veri bulunmuyor
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-            
             {/* Monthly Man-Hours Performance Section */}
-            <Card className="mt-6">
+            <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Aylık Adam Saat Performansı</CardTitle>
                 <CardDescription>
