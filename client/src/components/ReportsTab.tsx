@@ -711,6 +711,65 @@ export function ReportsTab({ project }: ReportsTabProps) {
               </Card>
             </div>
             
+            {/* Monthly Man-Hours Performance Section */}
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="text-lg">Aylık Adam Saat Performansı</CardTitle>
+                <CardDescription>
+                  Aylık adam saat karşılaştırması: Gerçekleşen (mavi) ve Kazanılan (turuncu)
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {reportData?.monthly && reportData.monthly.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={350}>
+                    <BarChart data={reportData.monthly}>
+                      <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                      <XAxis
+                        dataKey="month"
+                        tickFormatter={formatTurkishMonth}
+                        fontSize={12}
+                        tick={{ fill: "hsl(var(--muted-foreground))" }}
+                      />
+                      <YAxis
+                        fontSize={12}
+                        tick={{ fill: "hsl(var(--muted-foreground))" }}
+                        tickFormatter={(value) => `${value.toLocaleString("tr-TR")}`}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "hsl(var(--card))",
+                          border: "1px solid hsl(var(--border))",
+                          borderRadius: "8px",
+                        }}
+                        labelFormatter={formatTurkishMonth}
+                        formatter={(value: number, name: string) => [
+                          `${value.toLocaleString("tr-TR", { maximumFractionDigits: 2 })} A-S`,
+                          name
+                        ]}
+                      />
+                      <Legend />
+                      <Bar
+                        dataKey="manHours"
+                        name="Gerçekleşen"
+                        fill="#3b82f6"
+                        radius={[4, 4, 0, 0]}
+                      />
+                      <Bar
+                        dataKey="earnedManHours"
+                        name="Kazanılan"
+                        fill="#f97316"
+                        radius={[4, 4, 0, 0]}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-[350px] flex items-center justify-center text-muted-foreground">
+                    Henüz veri bulunmuyor
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            
             {/* Monthly Concrete Performance Section */}
             <Card className="mt-6">
               <CardHeader>
