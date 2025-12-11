@@ -29,6 +29,7 @@ import {
   ResponsiveContainer,
   AreaChart,
   Area,
+  ComposedChart,
 } from "recharts";
 import { TrendingUp, TrendingDown, Minus, FileDown, FileSpreadsheet, Calendar, Filter, Building2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -50,9 +51,9 @@ interface WorkItemStats {
 }
 
 interface ReportData {
-  daily: { date: string; manHours: number; quantity: number; target: number }[];
-  weekly: { week: string; manHours: number; quantity: number; target: number }[];
-  monthly: { month: string; manHours: number; quantity: number; target: number }[];
+  daily: { date: string; manHours: number; quantity: number; target: number; earnedManHours: number }[];
+  weekly: { week: string; manHours: number; quantity: number; target: number; earnedManHours: number }[];
+  monthly: { month: string; manHours: number; quantity: number; target: number; earnedManHours: number; cumulativeManHours: number; cumulativeEarnedManHours: number }[];
   monthlyConcrete: { month: string; actual: number; planned: number }[];
   cumulative: { date: string; cumulativeManHours: number; cumulativeQuantity: number; cumulativeTarget: number }[];
   workItems: WorkItemStats[];
@@ -622,58 +623,6 @@ export function ReportsTab({ project }: ReportsTabProps) {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">Aylık Adam-Saat Performansı</CardTitle>
-                  <CardDescription>Aylık toplam adam-saat ve hedef karşılaştırması</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {reportData?.monthly && reportData.monthly.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={reportData.monthly}>
-                        <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                        <XAxis
-                          dataKey="month"
-                          tickFormatter={formatTurkishMonth}
-                          fontSize={12}
-                          tick={{ fill: "hsl(var(--muted-foreground))" }}
-                        />
-                        <YAxis
-                          fontSize={12}
-                          tick={{ fill: "hsl(var(--muted-foreground))" }}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: "hsl(var(--card))",
-                            border: "1px solid hsl(var(--border))",
-                            borderRadius: "8px",
-                          }}
-                          labelFormatter={formatTurkishMonth}
-                        />
-                        <Legend />
-                        <Bar
-                          dataKey="manHours"
-                          name="Gerçekleşen"
-                          fill={chartColors.manHours}
-                          radius={[4, 4, 0, 0]}
-                        />
-                        <Bar
-                          dataKey="target"
-                          name="Hedef"
-                          fill={chartColors.target}
-                          radius={[4, 4, 0, 0]}
-                          opacity={0.6}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                      Henüz veri bulunmuyor
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
                   <CardTitle className="text-lg">Aylık Performans Özeti</CardTitle>
                   <CardDescription>Aylara göre performans değerlendirmesi</CardDescription>
                 </CardHeader>
@@ -716,13 +665,13 @@ export function ReportsTab({ project }: ReportsTabProps) {
               <CardHeader>
                 <CardTitle className="text-lg">Aylık Adam Saat Performansı</CardTitle>
                 <CardDescription>
-                  Aylık adam saat karşılaştırması: Gerçekleşen (mavi) ve Kazanılan (turuncu)
+                  Aylık: Gerçekleşen (mavi çubuk) ve Kazanılan (turuncu çubuk) | Kümülatif: Gerçekleşen (mavi çizgi) ve Kazanılan (turuncu çizgi)
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 {reportData?.monthly && reportData.monthly.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={350}>
-                    <BarChart data={reportData.monthly}>
+                  <ResponsiveContainer width="100%" height={400}>
+                    <ComposedChart data={reportData.monthly}>
                       <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                       <XAxis
                         dataKey="month"
@@ -731,9 +680,19 @@ export function ReportsTab({ project }: ReportsTabProps) {
                         tick={{ fill: "hsl(var(--muted-foreground))" }}
                       />
                       <YAxis
+                        yAxisId="left"
                         fontSize={12}
                         tick={{ fill: "hsl(var(--muted-foreground))" }}
                         tickFormatter={(value) => `${value.toLocaleString("tr-TR")}`}
+                        label={{ value: "Aylık (A-S)", angle: -90, position: "insideLeft", style: { textAnchor: "middle", fill: "hsl(var(--muted-foreground))" } }}
+                      />
+                      <YAxis
+                        yAxisId="right"
+                        orientation="right"
+                        fontSize={12}
+                        tick={{ fill: "hsl(var(--muted-foreground))" }}
+                        tickFormatter={(value) => `${value.toLocaleString("tr-TR")}`}
+                        label={{ value: "Kümülatif (A-S)", angle: 90, position: "insideRight", style: { textAnchor: "middle", fill: "hsl(var(--muted-foreground))" } }}
                       />
                       <Tooltip
                         contentStyle={{
@@ -749,21 +708,41 @@ export function ReportsTab({ project }: ReportsTabProps) {
                       />
                       <Legend />
                       <Bar
+                        yAxisId="left"
                         dataKey="manHours"
-                        name="Gerçekleşen"
+                        name="Aylık Gerçekleşen"
                         fill="#3b82f6"
                         radius={[4, 4, 0, 0]}
                       />
                       <Bar
+                        yAxisId="left"
                         dataKey="earnedManHours"
-                        name="Kazanılan"
+                        name="Aylık Kazanılan"
                         fill="#f97316"
                         radius={[4, 4, 0, 0]}
                       />
-                    </BarChart>
+                      <Line
+                        yAxisId="right"
+                        type="monotone"
+                        dataKey="cumulativeManHours"
+                        name="Kümülatif Gerçekleşen"
+                        stroke="#3b82f6"
+                        strokeWidth={2}
+                        dot={{ fill: "#3b82f6", strokeWidth: 2 }}
+                      />
+                      <Line
+                        yAxisId="right"
+                        type="monotone"
+                        dataKey="cumulativeEarnedManHours"
+                        name="Kümülatif Kazanılan"
+                        stroke="#f97316"
+                        strokeWidth={2}
+                        dot={{ fill: "#f97316", strokeWidth: 2 }}
+                      />
+                    </ComposedChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="h-[350px] flex items-center justify-center text-muted-foreground">
+                  <div className="h-[400px] flex items-center justify-center text-muted-foreground">
                     Henüz veri bulunmuyor
                   </div>
                 )}

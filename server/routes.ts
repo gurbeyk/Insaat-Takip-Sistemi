@@ -847,15 +847,24 @@ export async function registerRoutes(
         monthlyData[monthKey].earnedManHours += item.earnedManHours;
       });
       
+      // Build monthly array with cumulative values
+      let monthlyCumulativeManHours = 0;
+      let monthlyCumulativeEarnedManHours = 0;
       const monthly = Object.entries(monthlyData)
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([month, data]) => ({
-          month,
-          manHours: data.manHours,
-          quantity: data.quantity,
-          target: data.target,
-          earnedManHours: data.earnedManHours,
-        }));
+        .map(([month, data]) => {
+          monthlyCumulativeManHours += data.manHours;
+          monthlyCumulativeEarnedManHours += data.earnedManHours;
+          return {
+            month,
+            manHours: data.manHours,
+            quantity: data.quantity,
+            target: data.target,
+            earnedManHours: data.earnedManHours,
+            cumulativeManHours: monthlyCumulativeManHours,
+            cumulativeEarnedManHours: monthlyCumulativeEarnedManHours,
+          };
+        });
       
       // Calculate monthly concrete performance (m3 work items only)
       const monthlyConcreteData: Record<string, { actual: number; planned: number }> = {};
