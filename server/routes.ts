@@ -759,9 +759,12 @@ export async function registerRoutes(
       const schedule = await storage.getMonthlySchedule(projectId);
       const workSchedule = await storage.getMonthlyWorkItemSchedule(projectId);
       
-      // Get m3 work items for concrete calculation
+      // Get work items by unit type for material breakdown
       const m3WorkItems = workItems.filter(w => w.unit === 'm3');
       const m3WorkItemIds = new Set(m3WorkItems.map(w => w.id));
+      const m2WorkItemIds = new Set(workItems.filter(w => w.unit === 'm2').map(w => w.id));
+      const tonWorkItemIds = new Set(workItems.filter(w => w.unit === 'ton').map(w => w.id));
+      
       // Create a map from normalized work item name to work item ID for schedule matching
       const workItemNameToIdMap = new Map<string, string>();
       workItems.forEach(w => {
@@ -774,14 +777,24 @@ export async function registerRoutes(
         workItemUnitManHoursMap.set(w.id, w.targetManHours || 0);
       });
       
-      const dailyData: Record<string, { manHours: number; quantity: number; target: number; earnedManHours: number }> = {};
+      const dailyData: Record<string, { manHours: number; quantity: number; target: number; earnedManHours: number; concrete: number; formwork: number; rebar: number }> = {};
       entries.forEach((entry) => {
         const date = entry.entryDate;
         if (!dailyData[date]) {
-          dailyData[date] = { manHours: 0, quantity: 0, target: 0, earnedManHours: 0 };
+          dailyData[date] = { manHours: 0, quantity: 0, target: 0, earnedManHours: 0, concrete: 0, formwork: 0, rebar: 0 };
         }
         dailyData[date].manHours += entry.manHours || 0;
         dailyData[date].quantity += entry.quantity || 0;
+        // Material breakdown by unit type
+        if (m3WorkItemIds.has(entry.workItemId)) {
+          dailyData[date].concrete += entry.quantity || 0;
+        }
+        if (m2WorkItemIds.has(entry.workItemId)) {
+          dailyData[date].formwork += entry.quantity || 0;
+        }
+        if (tonWorkItemIds.has(entry.workItemId)) {
+          dailyData[date].rebar += entry.quantity || 0;
+        }
         // Calculate earned man-hours: quantity × unit man-hours (birim adam saat)
         const unitManHours = workItemUnitManHoursMap.get(entry.workItemId) || 0;
         dailyData[date].earnedManHours += (entry.quantity || 0) * unitManHours;
@@ -799,7 +812,13 @@ export async function registerRoutes(
           quantity: data.quantity,
           target: dailyTarget,
           earnedManHours: data.earnedManHours,
+          concrete: data.concrete,
+          formwork: data.formwork,
+          rebar: data.rebar,
         }));
+      
+      // Get the last day's stats
+      const lastDayStats = daily.length > 0 ? daily[daily.length - 1] : null;
       
       const weeklyData: Record<string, { manHours: number; quantity: number; target: number; earnedManHours: number }> = {};
       daily.forEach((item) => {
@@ -969,6 +988,7 @@ export async function registerRoutes(
         monthlyConcrete,
         cumulative,
         workItems: workItemStats,
+        lastDayStats,
         summary: {
           totalPlannedManHours: project.plannedManHours || 0,
           totalSpentManHours: entries.reduce((sum, e) => sum + (e.manHours || 0), 0),

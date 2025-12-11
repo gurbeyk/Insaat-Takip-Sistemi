@@ -50,13 +50,25 @@ interface WorkItemStats {
   progressPercent: number;
 }
 
+interface DailyData {
+  date: string;
+  manHours: number;
+  quantity: number;
+  target: number;
+  earnedManHours: number;
+  concrete: number;
+  formwork: number;
+  rebar: number;
+}
+
 interface ReportData {
-  daily: { date: string; manHours: number; quantity: number; target: number; earnedManHours: number }[];
+  daily: DailyData[];
   weekly: { week: string; manHours: number; quantity: number; target: number; earnedManHours: number }[];
   monthly: { month: string; manHours: number; quantity: number; target: number; earnedManHours: number; cumulativeManHours: number; cumulativeEarnedManHours: number }[];
   monthlyConcrete: { month: string; actual: number; planned: number }[];
   cumulative: { date: string; cumulativeManHours: number; cumulativeQuantity: number; cumulativeTarget: number }[];
   workItems: WorkItemStats[];
+  lastDayStats: DailyData | null;
   summary: {
     totalPlannedManHours: number;
     totalSpentManHours: number;
@@ -376,35 +388,6 @@ export function ReportsTab({ project }: ReportsTabProps) {
       </Card>
 
       <div ref={reportRef} className="space-y-6 bg-background p-4 rounded-lg">
-        {reportData?.summary && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-sm text-muted-foreground">Planlanan Adam-Saat</p>
-                <p className="text-2xl font-bold">{reportData.summary.totalPlannedManHours.toLocaleString("tr-TR")}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-sm text-muted-foreground">Gerçekleşen Adam-Saat</p>
-                <p className="text-2xl font-bold">{reportData.summary.totalSpentManHours.toLocaleString("tr-TR")}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-sm text-muted-foreground">Planlanan Miktar</p>
-                <p className="text-2xl font-bold">{reportData.summary.totalPlannedConcrete.toLocaleString("tr-TR")}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-sm text-muted-foreground">Gerçekleşen Miktar</p>
-                <p className="text-2xl font-bold">{reportData.summary.totalQuantity.toLocaleString("tr-TR")}</p>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
         <Tabs value={reportType} onValueChange={setReportType}>
           <TabsList className="grid w-full grid-cols-5 max-w-2xl">
             <TabsTrigger value="daily" data-testid="tab-daily">Günlük</TabsTrigger>
@@ -418,105 +401,174 @@ export function ReportsTab({ project }: ReportsTabProps) {
           </TabsList>
 
           <TabsContent value="daily" className="mt-6">
+            {/* Last Day Stats */}
+            {reportData?.lastDayStats && (
+              <div className="mb-6">
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <h3 className="text-lg font-semibold">Son Giriş:</h3>
+                  <span className="text-muted-foreground">
+                    {new Date(reportData.lastDayStats.date).toLocaleDateString("tr-TR", { 
+                      day: "numeric", 
+                      month: "long", 
+                      year: "numeric" 
+                    })}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-sm text-muted-foreground">Günlük Dökülen Beton</p>
+                      <p className="text-2xl font-bold" data-testid="text-daily-concrete">
+                        {reportData.lastDayStats.concrete.toLocaleString("tr-TR", { maximumFractionDigits: 2 })} m³
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-sm text-muted-foreground">Günlük Kalıp</p>
+                      <p className="text-2xl font-bold" data-testid="text-daily-formwork">
+                        {reportData.lastDayStats.formwork.toLocaleString("tr-TR", { maximumFractionDigits: 2 })} m²
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-sm text-muted-foreground">Günlük Demir</p>
+                      <p className="text-2xl font-bold" data-testid="text-daily-rebar">
+                        {reportData.lastDayStats.rebar.toLocaleString("tr-TR", { maximumFractionDigits: 2 })} ton
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-sm text-muted-foreground">Gerçekleşen Adam-Saat</p>
+                      <p className="text-2xl font-bold" data-testid="text-daily-manhours">
+                        {reportData.lastDayStats.manHours.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg">Günlük Adam-Saat Performansı</CardTitle>
-                  <CardDescription>Son 30 günlük adam-saat verileri</CardDescription>
+                  <CardDescription>
+                    {reportData?.lastDayStats 
+                      ? `${formatTurkishMonth(reportData.lastDayStats.date.substring(0, 7))} ayı verileri`
+                      : "Aylık adam-saat verileri"}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {reportData?.daily && reportData.daily.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={reportData.daily}>
-                        <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                        <XAxis
-                          dataKey="date"
-                          tickFormatter={formatTurkishDate}
-                          fontSize={12}
-                          tick={{ fill: "hsl(var(--muted-foreground))" }}
-                        />
-                        <YAxis
-                          fontSize={12}
-                          tick={{ fill: "hsl(var(--muted-foreground))" }}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: "hsl(var(--card))",
-                            border: "1px solid hsl(var(--border))",
-                            borderRadius: "8px",
-                          }}
-                          labelFormatter={formatTurkishDate}
-                        />
-                        <Legend />
-                        <Bar
-                          dataKey="manHours"
-                          name="Adam-Saat"
-                          fill={chartColors.manHours}
-                          radius={[4, 4, 0, 0]}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="target"
-                          name="Hedef"
-                          stroke={chartColors.target}
-                          strokeDasharray="5 5"
-                          strokeWidth={2}
-                          dot={false}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                      Henüz veri bulunmuyor
-                    </div>
-                  )}
+                  {(() => {
+                    const currentMonthData = reportData?.daily && reportData.lastDayStats
+                      ? reportData.daily.filter(d => d.date.substring(0, 7) === reportData.lastDayStats!.date.substring(0, 7))
+                      : reportData?.daily || [];
+                    
+                    return currentMonthData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={currentMonthData}>
+                          <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                          <XAxis
+                            dataKey="date"
+                            tickFormatter={(d) => new Date(d).getDate().toString()}
+                            fontSize={12}
+                            tick={{ fill: "hsl(var(--muted-foreground))" }}
+                          />
+                          <YAxis
+                            fontSize={12}
+                            tick={{ fill: "hsl(var(--muted-foreground))" }}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "hsl(var(--card))",
+                              border: "1px solid hsl(var(--border))",
+                              borderRadius: "8px",
+                            }}
+                            labelFormatter={formatTurkishDate}
+                          />
+                          <Legend />
+                          <Bar
+                            dataKey="manHours"
+                            name="Adam-Saat"
+                            fill={chartColors.manHours}
+                            radius={[4, 4, 0, 0]}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="target"
+                            name="Hedef"
+                            stroke={chartColors.target}
+                            strokeDasharray="5 5"
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                        Henüz veri bulunmuyor
+                      </div>
+                    );
+                  })()}
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">Günlük Metraj Performansı</CardTitle>
-                  <CardDescription>Son 30 günlük metraj verileri</CardDescription>
+                  <CardTitle className="text-lg">Günlük Beton Dökümü</CardTitle>
+                  <CardDescription>
+                    {reportData?.lastDayStats 
+                      ? `${formatTurkishMonth(reportData.lastDayStats.date.substring(0, 7))} ayı beton verileri (m³)`
+                      : "Aylık beton verileri (m³)"}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {reportData?.daily && reportData.daily.length > 0 ? (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <LineChart data={reportData.daily}>
-                        <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                        <XAxis
-                          dataKey="date"
-                          tickFormatter={formatTurkishDate}
-                          fontSize={12}
-                          tick={{ fill: "hsl(var(--muted-foreground))" }}
-                        />
-                        <YAxis
-                          fontSize={12}
-                          tick={{ fill: "hsl(var(--muted-foreground))" }}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: "hsl(var(--card))",
-                            border: "1px solid hsl(var(--border))",
-                            borderRadius: "8px",
-                          }}
-                          labelFormatter={formatTurkishDate}
-                        />
-                        <Legend />
-                        <Line
-                          type="monotone"
-                          dataKey="quantity"
-                          name="Miktar"
-                          stroke={chartColors.quantity}
-                          strokeWidth={2}
-                          dot={{ r: 3 }}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                      Henüz veri bulunmuyor
-                    </div>
-                  )}
+                  {(() => {
+                    const currentMonthData = reportData?.daily && reportData.lastDayStats
+                      ? reportData.daily.filter(d => d.date.substring(0, 7) === reportData.lastDayStats!.date.substring(0, 7))
+                      : reportData?.daily || [];
+                    
+                    return currentMonthData.length > 0 ? (
+                      <ResponsiveContainer width="100%" height={300}>
+                        <BarChart data={currentMonthData}>
+                          <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                          <XAxis
+                            dataKey="date"
+                            tickFormatter={(d) => new Date(d).getDate().toString()}
+                            fontSize={12}
+                            tick={{ fill: "hsl(var(--muted-foreground))" }}
+                          />
+                          <YAxis
+                            fontSize={12}
+                            tick={{ fill: "hsl(var(--muted-foreground))" }}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: "hsl(var(--card))",
+                              border: "1px solid hsl(var(--border))",
+                              borderRadius: "8px",
+                            }}
+                            labelFormatter={formatTurkishDate}
+                            formatter={(value: number) => [`${value.toLocaleString("tr-TR")} m³`, "Beton"]}
+                          />
+                          <Legend />
+                          <Bar
+                            dataKey="concrete"
+                            name="Beton (m³)"
+                            fill={chartColors.quantity}
+                            radius={[4, 4, 0, 0]}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                        Henüz veri bulunmuyor
+                      </div>
+                    );
+                  })()}
                 </CardContent>
               </Card>
             </div>
