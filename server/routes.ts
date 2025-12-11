@@ -550,14 +550,23 @@ export async function registerRoutes(
       const workItems = await storage.getWorkItems(projectId);
       const schedule = await storage.getMonthlySchedule(projectId);
       
-      const dailyData: Record<string, { manHours: number; quantity: number }> = {};
+      const workItemMap = new Map<string, { targetManHours: number }>();
+      workItems.forEach((wi) => {
+        workItemMap.set(String(wi.id), { targetManHours: wi.targetManHours || 0 });
+      });
+      
+      const dailyData: Record<string, { manHours: number; quantity: number; earnedManHours: number }> = {};
       entries.forEach((entry) => {
         const date = entry.entryDate;
         if (!dailyData[date]) {
-          dailyData[date] = { manHours: 0, quantity: 0 };
+          dailyData[date] = { manHours: 0, quantity: 0, earnedManHours: 0 };
         }
         dailyData[date].manHours += entry.manHours || 0;
         dailyData[date].quantity += entry.quantity || 0;
+        const wi = workItemMap.get(String(entry.workItemId));
+        if (wi) {
+          dailyData[date].earnedManHours += (entry.quantity || 0) * wi.targetManHours;
+        }
       });
       
       const totalPlannedManHours = project.plannedManHours || 0;
@@ -574,13 +583,16 @@ export async function registerRoutes(
       
       let cumulativeManHours = 0;
       let cumulativeQuantity = 0;
+      let cumulativeEarnedManHours = 0;
       const cumulativeData = performanceData.map((item) => {
         cumulativeManHours += item.manHours;
         cumulativeQuantity += item.quantity;
+        cumulativeEarnedManHours += item.earnedManHours;
         return {
           date: item.date,
           cumulativeManHours,
           cumulativeQuantity,
+          cumulativeEarnedManHours,
           plannedManHours: totalPlannedManHours,
           plannedConcrete: totalPlannedConcrete,
         };

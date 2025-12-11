@@ -901,15 +901,15 @@ export function ReportsTab({ project }: ReportsTabProps) {
           <TabsContent value="cumulative" className="mt-6">
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Kümülatif Performans</CardTitle>
+                <CardTitle className="text-lg">Kümülatif Adam-Saat Performansı</CardTitle>
                 <CardDescription>
-                  Proje başlangıcından itibaren toplam adam-saat ve miktar birikimi
+                  Kümülatif Gerçekleşen (mavi çizgi) ve Kümülatif Kazanılan (turuncu çizgi) Adam-Saat
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 {reportData?.cumulative && reportData.cumulative.length > 0 ? (
                   <ResponsiveContainer width="100%" height={400}>
-                    <AreaChart data={reportData.cumulative}>
+                    <LineChart data={reportData.cumulative}>
                       <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                       <XAxis
                         dataKey="date"
@@ -920,6 +920,7 @@ export function ReportsTab({ project }: ReportsTabProps) {
                       <YAxis
                         fontSize={12}
                         tick={{ fill: "hsl(var(--muted-foreground))" }}
+                        tickFormatter={(value) => `${value.toLocaleString("tr-TR")}`}
                       />
                       <Tooltip
                         contentStyle={{
@@ -928,27 +929,29 @@ export function ReportsTab({ project }: ReportsTabProps) {
                           borderRadius: "8px",
                         }}
                         labelFormatter={formatTurkishDate}
+                        formatter={(value: number, name: string) => [
+                          `${value.toLocaleString("tr-TR", { maximumFractionDigits: 2 })} A-S`,
+                          name
+                        ]}
                       />
                       <Legend />
-                      <Area
-                        type="monotone"
-                        dataKey="cumulativeManHours"
-                        name="Toplam Adam-Saat"
-                        stroke={chartColors.manHours}
-                        fill={chartColors.manHours}
-                        fillOpacity={0.3}
-                        strokeWidth={2}
-                      />
                       <Line
                         type="monotone"
-                        dataKey="cumulativeTarget"
-                        name="Hedef"
-                        stroke={chartColors.target}
-                        strokeDasharray="5 5"
+                        dataKey="cumulativeManHours"
+                        name="Kümülatif Gerçekleşen"
+                        stroke="#3b82f6"
                         strokeWidth={2}
                         dot={false}
                       />
-                    </AreaChart>
+                      <Line
+                        type="monotone"
+                        dataKey="cumulativeEarnedManHours"
+                        name="Kümülatif Kazanılan"
+                        stroke="#f97316"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                    </LineChart>
                   </ResponsiveContainer>
                 ) : (
                   <div className="h-[400px] flex items-center justify-center text-muted-foreground">
