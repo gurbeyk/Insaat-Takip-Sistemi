@@ -179,20 +179,19 @@ export function ReportsTab({ project }: ReportsTabProps) {
       const workItemsSheet = XLSX.utils.json_to_sheet(
         reportData.workItems.map((wi) => {
           const progressUnitMH = wi.actualQuantity > 0 ? wi.actualManHours / wi.actualQuantity : 0;
-          const targetUnitMH = wi.targetQuantity > 0 ? wi.targetManHours / wi.targetQuantity : 0;
-          const efficiency = progressUnitMH > 0 ? (targetUnitMH / progressUnitMH) * 100 : 0;
+          const targetUnitMH = wi.targetManHours; // Already per-unit from template
+          const efficiency = progressUnitMH > 0 && targetUnitMH > 0 ? (targetUnitMH / progressUnitMH) * 100 : 0;
           return {
             "Bütçe Kodu": wi.budgetCode,
             "İmalat Kalemi": wi.name,
             "Birim": wi.unit,
             "Hedef Miktar": wi.targetQuantity,
             "Gerçekleşen Miktar": wi.actualQuantity,
-            "Hedef Adam-Saat": wi.targetManHours,
+            "Hedef Birim A-S": targetUnitMH > 0 ? Number(targetUnitMH.toFixed(2)) : "-",
             "Gerçekleşen Adam-Saat": wi.actualManHours,
             "İlerleme Birim A-S": progressUnitMH > 0 ? Number(progressUnitMH.toFixed(2)) : "-",
-            "Hedef Birim A-S": targetUnitMH > 0 ? Number(targetUnitMH.toFixed(2)) : "-",
             "İlerleme (%)": Math.round(wi.progressPercent),
-            "Verimlilik (%)": progressUnitMH > 0 ? Math.round(efficiency) : "-",
+            "Verimlilik (%)": progressUnitMH > 0 && targetUnitMH > 0 ? Math.round(efficiency) : "-",
           };
         })
       );
@@ -802,15 +801,14 @@ export function ReportsTab({ project }: ReportsTabProps) {
                       </TableHeader>
                       <TableBody>
                         {reportData.workItems.map((wi) => {
-                          // Calculate unit man-hours (man-hours per quantity)
+                          // Calculate progress unit man-hours (actual man-hours per actual quantity)
                           const progressUnitMH = wi.actualQuantity > 0 
                             ? wi.actualManHours / wi.actualQuantity 
                             : 0;
-                          const targetUnitMH = wi.targetQuantity > 0 
-                            ? wi.targetManHours / wi.targetQuantity 
-                            : 0;
+                          // Target unit MH is directly from template (already per-unit value)
+                          const targetUnitMH = wi.targetManHours;
                           // Efficiency: target unit MH / progress unit MH (higher is better)
-                          const efficiency = progressUnitMH > 0 
+                          const efficiency = progressUnitMH > 0 && targetUnitMH > 0
                             ? (targetUnitMH / progressUnitMH) * 100 
                             : 0;
                           
