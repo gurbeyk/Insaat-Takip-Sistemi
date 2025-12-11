@@ -97,7 +97,7 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
         description: "Proje bilgileri başarıyla kaydedildi.",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id] });
+      queryClient.invalidateQueries({ queryKey: [`/api/projects/${project.id}`] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects/with-stats"] });
     },
     onError: (error: Error) => {
