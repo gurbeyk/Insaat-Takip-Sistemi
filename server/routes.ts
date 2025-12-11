@@ -983,5 +983,108 @@ export async function registerRoutes(
     }
   });
 
+  // Weather API endpoint using Open-Meteo (free, no API key required)
+  app.get("/api/weather/:location", isAuthenticated, async (req: any, res) => {
+    try {
+      const location = decodeURIComponent(req.params.location);
+      
+      // First, geocode the location using Open-Meteo's geocoding API
+      const geocodeUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=tr&format=json`;
+      const geocodeResponse = await fetch(geocodeUrl);
+      const geocodeData = await geocodeResponse.json();
+      
+      if (!geocodeData.results || geocodeData.results.length === 0) {
+        return res.status(404).json({ message: "Lokasyon bulunamadı" });
+      }
+      
+      const { latitude, longitude, name, country } = geocodeData.results[0];
+      
+      // Now fetch weather data
+      const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max&current=temperature_2m,weather_code,is_day&timezone=auto&forecast_days=8`;
+      const weatherResponse = await fetch(weatherUrl);
+      const weatherData = await weatherResponse.json();
+      
+      // Map weather codes to Turkish descriptions and icons
+      const getWeatherInfo = (code: number) => {
+        const weatherCodes: Record<number, { description: string; icon: string }> = {
+          0: { description: "Açık", icon: "sun" },
+          1: { description: "Az bulutlu", icon: "cloud-sun" },
+          2: { description: "Parçalı bulutlu", icon: "cloud-sun" },
+          3: { description: "Bulutlu", icon: "cloud" },
+          45: { description: "Sisli", icon: "cloud-fog" },
+          48: { description: "Yoğun sis", icon: "cloud-fog" },
+          51: { description: "Hafif çisenti", icon: "cloud-drizzle" },
+          53: { description: "Çisenti", icon: "cloud-drizzle" },
+          55: { description: "Yoğun çisenti", icon: "cloud-drizzle" },
+          56: { description: "Dondurucu çisenti", icon: "cloud-drizzle" },
+          57: { description: "Yoğun dondurucu çisenti", icon: "cloud-drizzle" },
+          61: { description: "Hafif yağmur", icon: "cloud-rain" },
+          63: { description: "Yağmurlu", icon: "cloud-rain" },
+          65: { description: "Şiddetli yağmur", icon: "cloud-rain" },
+          66: { description: "Dondurucu yağmur", icon: "cloud-rain" },
+          67: { description: "Yoğun dondurucu yağmur", icon: "cloud-rain" },
+          71: { description: "Hafif kar", icon: "snowflake" },
+          73: { description: "Kar yağışlı", icon: "snowflake" },
+          75: { description: "Yoğun kar", icon: "snowflake" },
+          77: { description: "Kar taneleri", icon: "snowflake" },
+          80: { description: "Hafif sağanak", icon: "cloud-rain" },
+          81: { description: "Sağanak yağış", icon: "cloud-rain" },
+          82: { description: "Şiddetli sağanak", icon: "cloud-rain" },
+          85: { description: "Hafif kar sağanağı", icon: "snowflake" },
+          86: { description: "Kar sağanağı", icon: "snowflake" },
+          95: { description: "Gök gürültülü fırtına", icon: "cloud-lightning" },
+          96: { description: "Dolu ile fırtına", icon: "cloud-lightning" },
+          99: { description: "Şiddetli dolu fırtınası", icon: "cloud-lightning" },
+        };
+        return weatherCodes[code] || { description: "Bilinmiyor", icon: "cloud" };
+      };
+      
+      const currentWeather = getWeatherInfo(weatherData.current.weather_code);
+      
+      // Build 7-day forecast (skip today, take next 7 days)
+      const forecast = [];
+      for (let i = 1; i <= 7; i++) {
+        const date = weatherData.daily.time[i];
+        const weatherInfo = getWeatherInfo(weatherData.daily.weather_code[i]);
+        forecast.push({
+          date,
+          tempMax: Math.round(weatherData.daily.temperature_2m_max[i]),
+          tempMin: Math.round(weatherData.daily.temperature_2m_min[i]),
+          precipitation: weatherData.daily.precipitation_sum[i],
+          precipitationProbability: weatherData.daily.precipitation_probability_max[i],
+          description: weatherInfo.description,
+          icon: weatherInfo.icon,
+        });
+      }
+      
+      res.json({
+        location: {
+          name,
+          country,
+          latitude,
+          longitude,
+        },
+        current: {
+          temperature: Math.round(weatherData.current.temperature_2m),
+          description: currentWeather.description,
+          icon: currentWeather.icon,
+          isDay: weatherData.current.is_day === 1,
+        },
+        today: {
+          tempMax: Math.round(weatherData.daily.temperature_2m_max[0]),
+          tempMin: Math.round(weatherData.daily.temperature_2m_min[0]),
+          precipitation: weatherData.daily.precipitation_sum[0],
+          precipitationProbability: weatherData.daily.precipitation_probability_max[0],
+          description: getWeatherInfo(weatherData.daily.weather_code[0]).description,
+          icon: getWeatherInfo(weatherData.daily.weather_code[0]).icon,
+        },
+        forecast,
+      });
+    } catch (error) {
+      console.error("Error fetching weather:", error);
+      res.status(500).json({ message: "Hava durumu bilgisi alınamadı" });
+    }
+  });
+
   return httpServer;
 }
