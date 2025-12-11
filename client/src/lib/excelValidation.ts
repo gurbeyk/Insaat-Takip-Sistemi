@@ -505,3 +505,157 @@ export function formatValidationSummary(
   
   return parts.join(" ");
 }
+
+// Work Schedule (İş Programı) validation
+export interface WorkScheduleRow {
+  workItemName: string;
+  year: number;
+  month: number;
+  plannedQuantity: number;
+}
+
+export function validateWorkSchedule(
+  jsonData: unknown[][]
+): ValidationResult<WorkScheduleRow> {
+  const validItems: WorkScheduleRow[] = [];
+  const errors: ValidationError[] = [];
+  const warnings: string[] = [];
+
+  if (!jsonData || jsonData.length < 2) {
+    warnings.push("Excel dosyası boş veya yeterli veri içermiyor.");
+    return { validItems, errors, warnings };
+  }
+
+  // First row is headers: ["Aylar", "Grobeton", "Temel", "Ustyapi", ...]
+  const headers = jsonData[0] as (string | number | null)[];
+  
+  if (!headers || headers.length < 2) {
+    errors.push({
+      row: 1,
+      field: "Başlık",
+      value: headers,
+      message: "İş programı en az 2 sütun içermeli (Aylar + İmalat Kalemi)",
+    });
+    return { validItems, errors, warnings };
+  }
+
+  // Extract work item names from headers (skip first column which is "Aylar")
+  const workItemNames: string[] = [];
+  for (let i = 1; i < headers.length; i++) {
+    const name = headers[i];
+    if (name && String(name).trim()) {
+      workItemNames.push(String(name).trim());
+    }
+  }
+
+  if (workItemNames.length === 0) {
+    errors.push({
+      row: 1,
+      field: "Başlık",
+      value: headers,
+      message: "En az bir imalat kalemi başlığı bulunamadı.",
+    });
+    return { validItems, errors, warnings };
+  }
+
+  // Process data rows (starting from row 1)
+  for (let rowIndex = 1; rowIndex < jsonData.length; rowIndex++) {
+    const row = jsonData[rowIndex] as (number | string | null)[];
+    const rowNum = rowIndex + 1; // Excel row number (1-indexed)
+
+    if (!row || row.length === 0) continue;
+
+    const dateValue = row[0];
+    if (dateValue === null || dateValue === undefined) continue;
+
+    // Parse Excel date serial number to year and month
+    let year: number;
+    let month: number;
+
+    if (typeof dateValue === "number") {
+      // Excel date serial number
+      const date = new Date((dateValue - 25569) * 86400 * 1000);
+      year = date.getFullYear();
+      month = date.getMonth() + 1; // 1-indexed month
+    } else if (typeof dateValue === "string") {
+      // Try parsing YYYY-MM or similar format
+      const match = String(dateValue).match(/^(\d{4})-(\d{1,2})/);
+      if (match) {
+        year = parseInt(match[1], 10);
+        month = parseInt(match[2], 10);
+      } else {
+        errors.push({
+          row: rowNum,
+          field: "Aylar",
+          value: dateValue,
+          message: "Tarih formatı tanınamadı. Beklenen: Excel tarih veya YYYY-MM formatı",
+        });
+        continue;
+      }
+    } else {
+      continue;
+    }
+
+    // Validate year and month
+    if (year < 2000 || year > 2100 || month < 1 || month > 12) {
+      errors.push({
+        row: rowNum,
+        field: "Aylar",
+        value: dateValue,
+        message: `Geçersiz tarih: ${year}-${month}`,
+      });
+      continue;
+    }
+
+    // Process each work item column
+    for (let colIndex = 0; colIndex < workItemNames.length; colIndex++) {
+      const workItemName = workItemNames[colIndex];
+      const quantityValue = row[colIndex + 1]; // +1 because first column is date
+
+      // Skip null/empty values
+      if (quantityValue === null || quantityValue === undefined || quantityValue === "") {
+        continue;
+      }
+
+      let plannedQuantity: number;
+      if (typeof quantityValue === "number") {
+        plannedQuantity = quantityValue;
+      } else {
+        const parsed = parseFloat(String(quantityValue).replace(",", "."));
+        if (isNaN(parsed)) {
+          errors.push({
+            row: rowNum,
+            field: workItemName,
+            value: quantityValue,
+            message: `"${quantityValue}" geçerli bir sayı değil`,
+          });
+          continue;
+        }
+        plannedQuantity = parsed;
+      }
+
+      if (plannedQuantity < 0) {
+        errors.push({
+          row: rowNum,
+          field: workItemName,
+          value: plannedQuantity,
+          message: "Planlanan miktar negatif olamaz",
+        });
+        continue;
+      }
+
+      validItems.push({
+        workItemName,
+        year,
+        month,
+        plannedQuantity,
+      });
+    }
+  }
+
+  if (validItems.length === 0 && errors.length === 0) {
+    warnings.push("İş programında geçerli veri bulunamadı.");
+  }
+
+  return { validItems, errors, warnings };
+}

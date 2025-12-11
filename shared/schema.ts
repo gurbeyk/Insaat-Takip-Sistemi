@@ -92,6 +92,17 @@ export const monthlySchedule = pgTable("monthly_schedule", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Monthly Work Item Schedule (Aylık İmalat Kalemi Programı)
+export const monthlyWorkItemSchedule = pgTable("monthly_work_item_schedule", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  workItemName: varchar("work_item_name").notNull(), // İmalat kalemi adı (Grobeton, Temel, Ustyapi etc.)
+  year: integer("year").notNull(),
+  month: integer("month").notNull(), // 1-12
+  plannedQuantity: real("planned_quantity").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Project members for authorization
 export const projectMembers = pgTable("project_members", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -116,6 +127,7 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   workItems: many(workItems),
   dailyEntries: many(dailyEntries),
   monthlySchedule: many(monthlySchedule),
+  monthlyWorkItemSchedule: many(monthlyWorkItemSchedule),
   members: many(projectMembers),
 }));
 
@@ -145,6 +157,13 @@ export const dailyEntriesRelations = relations(dailyEntries, ({ one }) => ({
 export const monthlyScheduleRelations = relations(monthlySchedule, ({ one }) => ({
   project: one(projects, {
     fields: [monthlySchedule.projectId],
+    references: [projects.id],
+  }),
+}));
+
+export const monthlyWorkItemScheduleRelations = relations(monthlyWorkItemSchedule, ({ one }) => ({
+  project: one(projects, {
+    fields: [monthlyWorkItemSchedule.projectId],
     references: [projects.id],
   }),
 }));
@@ -189,6 +208,11 @@ export const insertMonthlyScheduleSchema = createInsertSchema(monthlySchedule).o
   createdAt: true,
 });
 
+export const insertMonthlyWorkItemScheduleSchema = createInsertSchema(monthlyWorkItemSchedule).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertProjectMemberSchema = createInsertSchema(projectMembers).omit({
   id: true,
   createdAt: true,
@@ -210,6 +234,9 @@ export type InsertDailyEntry = z.infer<typeof insertDailyEntrySchema>;
 
 export type MonthlySchedule = typeof monthlySchedule.$inferSelect;
 export type InsertMonthlySchedule = z.infer<typeof insertMonthlyScheduleSchema>;
+
+export type MonthlyWorkItemSchedule = typeof monthlyWorkItemSchedule.$inferSelect;
+export type InsertMonthlyWorkItemSchedule = z.infer<typeof insertMonthlyWorkItemScheduleSchema>;
 
 export type ProjectMember = typeof projectMembers.$inferSelect;
 export type InsertProjectMember = z.infer<typeof insertProjectMemberSchema>;
