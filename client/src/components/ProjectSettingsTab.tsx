@@ -51,6 +51,7 @@ const projectSettingsSchema = z.object({
   status: z.string(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
+  location: z.string().optional(),
 });
 
 type ProjectSettingsFormValues = z.infer<typeof projectSettingsSchema>;
@@ -82,6 +83,7 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
       status: project.status || "active",
       startDate: project.startDate || "",
       endDate: project.endDate || "",
+      location: project.location || "",
     },
   });
 
@@ -373,6 +375,27 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
                   )}
                 />
               </div>
+
+              <FormField
+                control={form.control}
+                name="location"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Proje Lokasyonu</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Örn: İstanbul, Ankara, İzmir"
+                        {...field}
+                        data-testid="input-settings-location"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                    <p className="text-xs text-muted-foreground">
+                      Hava durumu bilgisi için şehir adını girin
+                    </p>
+                  </FormItem>
+                )}
+              />
 
               <div className="flex justify-end">
                 <Button
