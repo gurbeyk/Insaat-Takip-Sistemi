@@ -112,6 +112,20 @@ Preferred communication style: Simple, everyday language.
 ### Charting
 - **Recharts**: Data visualization for reports (line, bar, area charts)
 
+### Weather Integration
+- **Open-Meteo API**: Free weather service, no API key required
+- Weather endpoint: GET /api/weather/:location
+- Uses geocoding to convert city names to coordinates
+- Features:
+  - Current temperature and conditions
+  - Today's high/low temperatures
+  - 7-day weather forecast
+  - Turkish weather descriptions (Açık, Bulutlu, Yağmurlu, etc.)
+  - Weather icons (sun, cloud-sun, cloud, cloud-rain, snowflake, etc.)
+- Project location field in Settings tab enables weather display
+- Weather widget shows on Project Detail page (right side) when location is set
+- Turkish date formatting for forecast display
+
 ## Future Enhancements
 
 ### Email Notifications (Not Configured)
