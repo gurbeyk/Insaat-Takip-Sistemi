@@ -857,14 +857,21 @@ export async function registerRoutes(
         }
       });
       
-      // Get planned concrete from work schedule (only m3 work items)
-      // Look up work item ID by name and check if it's an m3 work item
+      // Get planned concrete from work schedule
+      // Match concrete work items by name: "Temel" and "Ustyapi" (Üstyapı)
+      const concreteWorkItemNames = new Set(["temel", "ustyapi", "üstyapı", "ustyapı", "üstyapi"]);
+      
       workSchedule.forEach((ws) => {
-        const normalizedName = ws.workItemName.trim().toLowerCase();
-        const workItemId = workItemNameToIdMap.get(normalizedName);
+        const normalizedName = ws.workItemName.trim().toLowerCase()
+          .replace(/ü/g, 'u').replace(/ı/g, 'i'); // Normalize Turkish chars
         
-        // Only include if we can match to an m3 work item
-        if (workItemId && m3WorkItemIds.has(workItemId)) {
+        // Check if this is a concrete work item (Temel or Ustyapi)
+        const isConcreteItem = concreteWorkItemNames.has(normalizedName) ||
+          normalizedName.includes("temel") || 
+          normalizedName.includes("ustyapi") ||
+          normalizedName.includes("üstyapı");
+        
+        if (isConcreteItem) {
           const monthKey = `${ws.year}-${String(ws.month).padStart(2, "0")}`;
           
           // Apply date filter if provided (using year/month comparison)

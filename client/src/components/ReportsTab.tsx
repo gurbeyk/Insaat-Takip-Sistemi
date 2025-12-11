@@ -714,9 +714,9 @@ export function ReportsTab({ project }: ReportsTabProps) {
             {/* Monthly Concrete Performance Section */}
             <Card className="mt-6">
               <CardHeader>
-                <CardTitle className="text-lg">Aylık İmalat Performansı (Beton - m3)</CardTitle>
+                <CardTitle className="text-lg">Aylık İmalat Performansı (Beton - m³)</CardTitle>
                 <CardDescription>
-                  Aylık beton imalat miktarları: Gerçekleşen (mavi) ve İş Programı (gri)
+                  Aylık beton imalat miktarları: Gerçekleşen (mavi) ve İş Programı (turuncu)
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -757,9 +757,8 @@ export function ReportsTab({ project }: ReportsTabProps) {
                       <Bar
                         dataKey="planned"
                         name="İş Programı"
-                        fill="#94a3b8"
+                        fill="#f97316"
                         radius={[4, 4, 0, 0]}
-                        opacity={0.7}
                       />
                     </BarChart>
                   </ResponsiveContainer>

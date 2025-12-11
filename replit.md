@@ -95,8 +95,9 @@ Preferred communication style: Simple, everyday language.
 ### Monthly Concrete Performance Chart
 - Reports > Aylık tab includes "Aylık İmalat Performansı (Beton - m3)" section
 - Shows actual monthly concrete production (blue) from daily entries where unit = "m3"
-- Shows planned monthly concrete (gray) from İş Programı (work schedule) data
-- Uses name-to-ID lookup for matching work schedule entries to work items
+- Shows planned monthly concrete (orange) from İş Programı (work schedule) data
+- Matches work schedule entries where workItemName is "Temel" or "Ustyapi" (foundation and superstructure concrete)
+- Sums both columns per month (e.g., Temel 804 + Ustyapi 877 = 1681)
 - Date filtering respects year/month boundaries correctly
 
 ### Charting
