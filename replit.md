@@ -92,6 +92,13 @@ Preferred communication style: Simple, everyday language.
 - Validation with detailed error feedback showing skipped rows with examples
 - Frontend and backend guards prevent empty uploads from wiping existing data
 
+### Monthly Concrete Performance Chart
+- Reports > Aylık tab includes "Aylık İmalat Performansı (Beton - m3)" section
+- Shows actual monthly concrete production (blue) from daily entries where unit = "m3"
+- Shows planned monthly concrete (gray) from İş Programı (work schedule) data
+- Uses name-to-ID lookup for matching work schedule entries to work items
+- Date filtering respects year/month boundaries correctly
+
 ### Charting
 - **Recharts**: Data visualization for reports (line, bar, area charts)
 

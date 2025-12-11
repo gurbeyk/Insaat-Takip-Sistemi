@@ -757,6 +757,16 @@ export async function registerRoutes(
       
       const workItems = await storage.getWorkItems(projectId);
       const schedule = await storage.getMonthlySchedule(projectId);
+      const workSchedule = await storage.getMonthlyWorkItemSchedule(projectId);
+      
+      // Get m3 work items for concrete calculation
+      const m3WorkItems = workItems.filter(w => w.unit === 'm3');
+      const m3WorkItemIds = new Set(m3WorkItems.map(w => w.id));
+      // Create a map from normalized work item name to work item ID for schedule matching
+      const workItemNameToIdMap = new Map<string, string>();
+      workItems.forEach(w => {
+        workItemNameToIdMap.set(w.name.trim().toLowerCase(), w.id);
+      });
       
       const dailyData: Record<string, { manHours: number; quantity: number; target: number }> = {};
       entries.forEach((entry) => {
@@ -833,6 +843,57 @@ export async function registerRoutes(
           target: data.target,
         }));
       
+      // Calculate monthly concrete performance (m3 work items only)
+      const monthlyConcreteData: Record<string, { actual: number; planned: number }> = {};
+      
+      // Get actual concrete from daily entries (only m3 work items)
+      entries.forEach((entry) => {
+        if (m3WorkItemIds.has(entry.workItemId)) {
+          const monthKey = entry.entryDate.substring(0, 7);
+          if (!monthlyConcreteData[monthKey]) {
+            monthlyConcreteData[monthKey] = { actual: 0, planned: 0 };
+          }
+          monthlyConcreteData[monthKey].actual += entry.quantity || 0;
+        }
+      });
+      
+      // Get planned concrete from work schedule (only m3 work items)
+      // Look up work item ID by name and check if it's an m3 work item
+      workSchedule.forEach((ws) => {
+        const normalizedName = ws.workItemName.trim().toLowerCase();
+        const workItemId = workItemNameToIdMap.get(normalizedName);
+        
+        // Only include if we can match to an m3 work item
+        if (workItemId && m3WorkItemIds.has(workItemId)) {
+          const monthKey = `${ws.year}-${String(ws.month).padStart(2, "0")}`;
+          
+          // Apply date filter if provided (using year/month comparison)
+          if (startDate) {
+            const filterYear = parseInt(startDate.substring(0, 4), 10);
+            const filterMonth = parseInt(startDate.substring(5, 7), 10);
+            if (ws.year < filterYear || (ws.year === filterYear && ws.month < filterMonth)) return;
+          }
+          if (endDate) {
+            const filterYear = parseInt(endDate.substring(0, 4), 10);
+            const filterMonth = parseInt(endDate.substring(5, 7), 10);
+            if (ws.year > filterYear || (ws.year === filterYear && ws.month > filterMonth)) return;
+          }
+          
+          if (!monthlyConcreteData[monthKey]) {
+            monthlyConcreteData[monthKey] = { actual: 0, planned: 0 };
+          }
+          monthlyConcreteData[monthKey].planned += ws.plannedQuantity || 0;
+        }
+      });
+      
+      const monthlyConcrete = Object.entries(monthlyConcreteData)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([month, data]) => ({
+          month,
+          actual: data.actual,
+          planned: data.planned,
+        }));
+      
       let cumulativeManHours = 0;
       let cumulativeQuantity = 0;
       let cumulativeTarget = 0;
@@ -869,6 +930,7 @@ export async function registerRoutes(
         daily,
         weekly,
         monthly,
+        monthlyConcrete,
         cumulative,
         workItems: workItemStats,
         summary: {

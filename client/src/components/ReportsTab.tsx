@@ -53,6 +53,7 @@ interface ReportData {
   daily: { date: string; manHours: number; quantity: number; target: number }[];
   weekly: { week: string; manHours: number; quantity: number; target: number }[];
   monthly: { month: string; manHours: number; quantity: number; target: number }[];
+  monthlyConcrete: { month: string; actual: number; planned: number }[];
   cumulative: { date: string; cumulativeManHours: number; cumulativeQuantity: number; cumulativeTarget: number }[];
   workItems: WorkItemStats[];
   summary: {
@@ -709,6 +710,66 @@ export function ReportsTab({ project }: ReportsTabProps) {
                 </CardContent>
               </Card>
             </div>
+            
+            {/* Monthly Concrete Performance Section */}
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="text-lg">Aylık İmalat Performansı (Beton - m3)</CardTitle>
+                <CardDescription>
+                  Aylık beton imalat miktarları: Gerçekleşen (mavi) ve İş Programı (gri)
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {reportData?.monthlyConcrete && reportData.monthlyConcrete.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={350}>
+                    <BarChart data={reportData.monthlyConcrete}>
+                      <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                      <XAxis
+                        dataKey="month"
+                        tickFormatter={formatTurkishMonth}
+                        fontSize={12}
+                        tick={{ fill: "hsl(var(--muted-foreground))" }}
+                      />
+                      <YAxis
+                        fontSize={12}
+                        tick={{ fill: "hsl(var(--muted-foreground))" }}
+                        tickFormatter={(value) => `${value.toLocaleString("tr-TR")}`}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "hsl(var(--card))",
+                          border: "1px solid hsl(var(--border))",
+                          borderRadius: "8px",
+                        }}
+                        labelFormatter={formatTurkishMonth}
+                        formatter={(value: number, name: string) => [
+                          `${value.toLocaleString("tr-TR", { maximumFractionDigits: 2 })} m³`,
+                          name
+                        ]}
+                      />
+                      <Legend />
+                      <Bar
+                        dataKey="actual"
+                        name="Gerçekleşen"
+                        fill="#3b82f6"
+                        radius={[4, 4, 0, 0]}
+                      />
+                      <Bar
+                        dataKey="planned"
+                        name="İş Programı"
+                        fill="#94a3b8"
+                        radius={[4, 4, 0, 0]}
+                        opacity={0.7}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-[350px] flex items-center justify-center text-muted-foreground">
+                    Henüz veri bulunmuyor
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="cumulative" className="mt-6">
