@@ -768,14 +768,23 @@ export async function registerRoutes(
         workItemNameToIdMap.set(w.name.trim().toLowerCase(), w.id);
       });
       
-      const dailyData: Record<string, { manHours: number; quantity: number; target: number }> = {};
+      // Create a map of workItemId -> targetManHours (birim adam saat) for earned man-hours calculation
+      const workItemUnitManHoursMap = new Map<string, number>();
+      workItems.forEach(w => {
+        workItemUnitManHoursMap.set(w.id, w.targetManHours || 0);
+      });
+      
+      const dailyData: Record<string, { manHours: number; quantity: number; target: number; earnedManHours: number }> = {};
       entries.forEach((entry) => {
         const date = entry.entryDate;
         if (!dailyData[date]) {
-          dailyData[date] = { manHours: 0, quantity: 0, target: 0 };
+          dailyData[date] = { manHours: 0, quantity: 0, target: 0, earnedManHours: 0 };
         }
         dailyData[date].manHours += entry.manHours || 0;
         dailyData[date].quantity += entry.quantity || 0;
+        // Calculate earned man-hours: quantity × unit man-hours (birim adam saat)
+        const unitManHours = workItemUnitManHoursMap.get(entry.workItemId) || 0;
+        dailyData[date].earnedManHours += (entry.quantity || 0) * unitManHours;
       });
       
       const totalPlannedManHours = project.plannedManHours || 0;
@@ -789,9 +798,10 @@ export async function registerRoutes(
           manHours: data.manHours,
           quantity: data.quantity,
           target: dailyTarget,
+          earnedManHours: data.earnedManHours,
         }));
       
-      const weeklyData: Record<string, { manHours: number; quantity: number; target: number }> = {};
+      const weeklyData: Record<string, { manHours: number; quantity: number; target: number; earnedManHours: number }> = {};
       daily.forEach((item) => {
         const date = new Date(item.date);
         const weekStart = new Date(date);
@@ -799,11 +809,12 @@ export async function registerRoutes(
         const weekKey = `${weekStart.getFullYear()}-W${String(Math.ceil((weekStart.getDate() + new Date(weekStart.getFullYear(), 0, 1).getDay()) / 7)).padStart(2, "0")}`;
         
         if (!weeklyData[weekKey]) {
-          weeklyData[weekKey] = { manHours: 0, quantity: 0, target: 0 };
+          weeklyData[weekKey] = { manHours: 0, quantity: 0, target: 0, earnedManHours: 0 };
         }
         weeklyData[weekKey].manHours += item.manHours;
         weeklyData[weekKey].quantity += item.quantity;
         weeklyData[weekKey].target += dailyTarget;
+        weeklyData[weekKey].earnedManHours += item.earnedManHours;
       });
       
       const weekly = Object.entries(weeklyData)
@@ -813,13 +824,14 @@ export async function registerRoutes(
           manHours: data.manHours,
           quantity: data.quantity,
           target: data.target,
+          earnedManHours: data.earnedManHours,
         }));
       
-      const monthlyData: Record<string, { manHours: number; quantity: number; target: number }> = {};
+      const monthlyData: Record<string, { manHours: number; quantity: number; target: number; earnedManHours: number }> = {};
       schedule.forEach((s) => {
         const monthKey = `${s.year}-${String(s.month).padStart(2, "0")}`;
         if (!monthlyData[monthKey]) {
-          monthlyData[monthKey] = { manHours: 0, quantity: 0, target: s.plannedManHours || 0 };
+          monthlyData[monthKey] = { manHours: 0, quantity: 0, target: s.plannedManHours || 0, earnedManHours: 0 };
         } else {
           monthlyData[monthKey].target = s.plannedManHours || 0;
         }
@@ -828,10 +840,11 @@ export async function registerRoutes(
       daily.forEach((item) => {
         const monthKey = item.date.substring(0, 7);
         if (!monthlyData[monthKey]) {
-          monthlyData[monthKey] = { manHours: 0, quantity: 0, target: 0 };
+          monthlyData[monthKey] = { manHours: 0, quantity: 0, target: 0, earnedManHours: 0 };
         }
         monthlyData[monthKey].manHours += item.manHours;
         monthlyData[monthKey].quantity += item.quantity;
+        monthlyData[monthKey].earnedManHours += item.earnedManHours;
       });
       
       const monthly = Object.entries(monthlyData)
@@ -841,6 +854,7 @@ export async function registerRoutes(
           manHours: data.manHours,
           quantity: data.quantity,
           target: data.target,
+          earnedManHours: data.earnedManHours,
         }));
       
       // Calculate monthly concrete performance (m3 work items only)
@@ -920,6 +934,8 @@ export async function registerRoutes(
         const wiEntries = entries.filter((e) => e.workItemId === wi.id);
         const totalManHours = wiEntries.reduce((sum, e) => sum + (e.manHours || 0), 0);
         const totalQuantity = wiEntries.reduce((sum, e) => sum + (e.quantity || 0), 0);
+        // Earned man-hours = total quantity × unit man-hours (birim adam saat)
+        const earnedManHours = totalQuantity * (wi.targetManHours || 0);
         return {
           id: wi.id,
           budgetCode: wi.budgetCode,
@@ -929,9 +945,13 @@ export async function registerRoutes(
           targetManHours: wi.targetManHours || 0,
           actualQuantity: totalQuantity,
           actualManHours: totalManHours,
+          earnedManHours: earnedManHours,
           progressPercent: (wi.targetQuantity || 0) > 0 ? (totalQuantity / (wi.targetQuantity || 1)) * 100 : 0,
         };
       });
+      
+      // Calculate total earned man-hours
+      const totalEarnedManHours = workItemStats.reduce((sum, wi) => sum + wi.earnedManHours, 0);
       
       res.json({
         daily,
@@ -943,6 +963,7 @@ export async function registerRoutes(
         summary: {
           totalPlannedManHours: project.plannedManHours || 0,
           totalSpentManHours: entries.reduce((sum, e) => sum + (e.manHours || 0), 0),
+          totalEarnedManHours: totalEarnedManHours,
           totalPlannedConcrete: project.totalConcrete || 0,
           totalQuantity: entries.reduce((sum, e) => sum + (e.quantity || 0), 0),
         },

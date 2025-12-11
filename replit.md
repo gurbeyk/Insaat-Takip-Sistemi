@@ -100,6 +100,15 @@ Preferred communication style: Simple, everyday language.
 - Sums both columns per month (e.g., Temel 804 + Ustyapi 877 = 1681)
 - Date filtering respects year/month boundaries correctly
 
+### Earned Man-Hours (Kazanılan Adam Saat)
+- Calculation: daily quantity × unit man-hours (birim adam saat) from work item template
+- Example: 4.845 m³ × 51.30 adam saat/m³ = 248.55 kazanılan adam saat
+- Available in reports API:
+  - daily/weekly/monthly data includes earnedManHours field
+  - workItems array includes earnedManHours per work item
+  - summary includes totalEarnedManHours for entire project
+- Used for performance analysis: comparing spent vs earned man-hours
+
 ### Charting
 - **Recharts**: Data visualization for reports (line, bar, area charts)
 
