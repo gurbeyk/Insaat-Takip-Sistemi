@@ -177,16 +177,24 @@ export function ReportsTab({ project }: ReportsTabProps) {
 
     if (reportData.workItems && reportData.workItems.length > 0) {
       const workItemsSheet = XLSX.utils.json_to_sheet(
-        reportData.workItems.map((wi) => ({
-          "Bütçe Kodu": wi.budgetCode,
-          "İmalat Kalemi": wi.name,
-          "Birim": wi.unit,
-          "Hedef Miktar": wi.targetQuantity,
-          "Gerçekleşen Miktar": wi.actualQuantity,
-          "Hedef Adam-Saat": wi.targetManHours,
-          "Gerçekleşen Adam-Saat": wi.actualManHours,
-          "İlerleme (%)": Math.round(wi.progressPercent),
-        }))
+        reportData.workItems.map((wi) => {
+          const progressUnitMH = wi.actualQuantity > 0 ? wi.actualManHours / wi.actualQuantity : 0;
+          const targetUnitMH = wi.targetQuantity > 0 ? wi.targetManHours / wi.targetQuantity : 0;
+          const efficiency = progressUnitMH > 0 ? (targetUnitMH / progressUnitMH) * 100 : 0;
+          return {
+            "Bütçe Kodu": wi.budgetCode,
+            "İmalat Kalemi": wi.name,
+            "Birim": wi.unit,
+            "Hedef Miktar": wi.targetQuantity,
+            "Gerçekleşen Miktar": wi.actualQuantity,
+            "Hedef Adam-Saat": wi.targetManHours,
+            "Gerçekleşen Adam-Saat": wi.actualManHours,
+            "İlerleme Birim A-S": progressUnitMH > 0 ? Number(progressUnitMH.toFixed(2)) : "-",
+            "Hedef Birim A-S": targetUnitMH > 0 ? Number(targetUnitMH.toFixed(2)) : "-",
+            "İlerleme (%)": Math.round(wi.progressPercent),
+            "Verimlilik (%)": progressUnitMH > 0 ? Math.round(efficiency) : "-",
+          };
+        })
       );
       XLSX.utils.book_append_sheet(workbook, workItemsSheet, "İmalat Kalemleri");
     }
@@ -787,33 +795,68 @@ export function ReportsTab({ project }: ReportsTabProps) {
                           <TableHead>Birim</TableHead>
                           <TableHead className="text-right">Hedef Miktar</TableHead>
                           <TableHead className="text-right">Gerçekleşen</TableHead>
-                          <TableHead className="text-right">Adam-Saat</TableHead>
+                          <TableHead className="text-right">Birim A-S</TableHead>
                           <TableHead>İlerleme</TableHead>
+                          <TableHead className="text-right">Verimlilik</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {reportData.workItems.map((wi) => (
-                          <TableRow key={wi.id}>
-                            <TableCell>
-                              <Badge variant="outline">{wi.budgetCode}</Badge>
-                            </TableCell>
-                            <TableCell className="font-medium">{wi.name}</TableCell>
-                            <TableCell>{wi.unit}</TableCell>
-                            <TableCell className="text-right">{wi.targetQuantity.toLocaleString("tr-TR")}</TableCell>
-                            <TableCell className="text-right">{wi.actualQuantity.toLocaleString("tr-TR")}</TableCell>
-                            <TableCell className="text-right">
-                              {wi.actualManHours.toLocaleString("tr-TR")} / {wi.targetManHours.toLocaleString("tr-TR")}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Progress value={Math.min(wi.progressPercent, 100)} className="w-20" />
-                                <span className="text-sm text-muted-foreground w-12 text-right">
-                                  {Math.round(wi.progressPercent)}%
-                                </span>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                        {reportData.workItems.map((wi) => {
+                          // Calculate unit man-hours (man-hours per quantity)
+                          const progressUnitMH = wi.actualQuantity > 0 
+                            ? wi.actualManHours / wi.actualQuantity 
+                            : 0;
+                          const targetUnitMH = wi.targetQuantity > 0 
+                            ? wi.targetManHours / wi.targetQuantity 
+                            : 0;
+                          // Efficiency: target unit MH / progress unit MH (higher is better)
+                          const efficiency = progressUnitMH > 0 
+                            ? (targetUnitMH / progressUnitMH) * 100 
+                            : 0;
+                          
+                          return (
+                            <TableRow key={wi.id}>
+                              <TableCell>
+                                <Badge variant="outline">{wi.budgetCode}</Badge>
+                              </TableCell>
+                              <TableCell className="font-medium">{wi.name}</TableCell>
+                              <TableCell>{wi.unit}</TableCell>
+                              <TableCell className="text-right">{wi.targetQuantity.toLocaleString("tr-TR")}</TableCell>
+                              <TableCell className="text-right">{wi.actualQuantity.toLocaleString("tr-TR")}</TableCell>
+                              <TableCell className="text-right">
+                                {wi.actualQuantity > 0 ? (
+                                  <span>
+                                    {progressUnitMH.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    {" / "}
+                                    {targetUnitMH.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground">-</span>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <Progress value={Math.min(wi.progressPercent, 100)} className="w-20" />
+                                  <span className="text-sm text-muted-foreground w-12 text-right">
+                                    {Math.round(wi.progressPercent)}%
+                                  </span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {progressUnitMH > 0 ? (
+                                  <Badge 
+                                    variant={efficiency >= 100 ? "default" : "secondary"}
+                                    className={efficiency >= 100 ? "bg-green-600" : ""}
+                                  >
+                                    %{Math.round(efficiency)}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-muted-foreground">-</span>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>
