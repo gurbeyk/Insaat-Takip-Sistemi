@@ -4,6 +4,7 @@ import {
   workItems,
   dailyEntries,
   monthlySchedule,
+  monthlyWorkItemSchedule,
   projectMembers,
   type User,
   type UpsertUser,
@@ -15,6 +16,8 @@ import {
   type InsertDailyEntry,
   type MonthlySchedule,
   type InsertMonthlySchedule,
+  type MonthlyWorkItemSchedule,
+  type InsertMonthlyWorkItemSchedule,
   type ProjectMember,
   type InsertProjectMember,
 } from "@shared/schema";
@@ -50,6 +53,10 @@ export interface IStorage {
   
   getMonthlySchedule(projectId: string): Promise<MonthlySchedule[]>;
   upsertMonthlySchedule(schedule: InsertMonthlySchedule): Promise<MonthlySchedule>;
+  
+  getMonthlyWorkItemSchedule(projectId: string): Promise<MonthlyWorkItemSchedule[]>;
+  createMonthlyWorkItemSchedules(schedules: InsertMonthlyWorkItemSchedule[]): Promise<MonthlyWorkItemSchedule[]>;
+  deleteMonthlyWorkItemSchedule(projectId: string): Promise<void>;
   
   getProjectMembers(projectId: string): Promise<ProjectMember[]>;
   getProjectMembersWithUsers(projectId: string): Promise<(ProjectMember & { user: User | null })[]>;
@@ -289,6 +296,24 @@ export class DatabaseStorage implements IStorage {
 
     const [newSchedule] = await db.insert(monthlySchedule).values(schedule).returning();
     return newSchedule;
+  }
+
+  async getMonthlyWorkItemSchedule(projectId: string): Promise<MonthlyWorkItemSchedule[]> {
+    return await db
+      .select()
+      .from(monthlyWorkItemSchedule)
+      .where(eq(monthlyWorkItemSchedule.projectId, projectId))
+      .orderBy(monthlyWorkItemSchedule.workItemName, monthlyWorkItemSchedule.year, monthlyWorkItemSchedule.month);
+  }
+
+  async createMonthlyWorkItemSchedules(schedules: InsertMonthlyWorkItemSchedule[]): Promise<MonthlyWorkItemSchedule[]> {
+    if (schedules.length === 0) return [];
+    const inserted = await db.insert(monthlyWorkItemSchedule).values(schedules).returning();
+    return inserted;
+  }
+
+  async deleteMonthlyWorkItemSchedule(projectId: string): Promise<void> {
+    await db.delete(monthlyWorkItemSchedule).where(eq(monthlyWorkItemSchedule.projectId, projectId));
   }
 
   async getProjectMembers(projectId: string): Promise<ProjectMember[]> {
