@@ -7,6 +7,7 @@ import {
   insertWorkItemSchema,
   insertDailyEntrySchema,
   insertMonthlyScheduleSchema,
+  insertMonthlyWorkItemScheduleSchema,
   insertProjectMemberSchema,
 } from "@shared/schema";
 import { z } from "zod";
@@ -269,6 +270,56 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Invalid work item data", errors: error.errors });
       }
       res.status(500).json({ message: "Failed to create work items" });
+    }
+  });
+
+  // Monthly Work Item Schedule (İş Programı) endpoints
+  app.get("/api/projects/:id/work-schedule", isAuthenticated, async (req: any, res) => {
+    try {
+      const projectId = req.params.id;
+      const userId = req.user.claims.sub;
+      
+      if (!(await storage.canAccessProject(projectId, userId))) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      const schedule = await storage.getMonthlyWorkItemSchedule(projectId);
+      res.json(schedule);
+    } catch (error) {
+      console.error("Error fetching work schedule:", error);
+      res.status(500).json({ message: "Failed to fetch work schedule" });
+    }
+  });
+
+  app.post("/api/projects/:id/work-schedule/bulk", isAuthenticated, async (req: any, res) => {
+    try {
+      const projectId = req.params.id;
+      const userId = req.user.claims.sub;
+      
+      if (!(await storage.canAccessProject(projectId, userId))) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      const items = req.body.items as any[];
+      
+      // Delete existing schedule for this project before importing new one
+      await storage.deleteMonthlyWorkItemSchedule(projectId);
+      
+      const parsedItems = items.map((item) =>
+        insertMonthlyWorkItemScheduleSchema.parse({
+          ...item,
+          projectId,
+        })
+      );
+      
+      const schedule = await storage.createMonthlyWorkItemSchedules(parsedItems);
+      res.status(201).json(schedule);
+    } catch (error) {
+      console.error("Error bulk creating work schedule:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid work schedule data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create work schedule" });
     }
   });
 
