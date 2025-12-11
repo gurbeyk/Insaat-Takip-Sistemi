@@ -48,6 +48,7 @@ export const projects = pgTable("projects", {
   startDate: date("start_date"),
   endDate: date("end_date"),
   status: varchar("status").default("active"), // 'active', 'completed', 'paused'
+  location: varchar("location"), // City name for weather data (e.g., "Istanbul", "Ankara")
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
