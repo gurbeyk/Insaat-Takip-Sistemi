@@ -514,6 +514,116 @@ export interface WorkScheduleRow {
   plannedQuantity: number;
 }
 
+// Turkish month names mapping
+const turkishMonths: Record<string, number> = {
+  "ocak": 1, "oca": 1,
+  "şubat": 2, "şub": 2,
+  "mart": 3, "mar": 3,
+  "nisan": 4, "nis": 4,
+  "mayıs": 5, "may": 5,
+  "haziran": 6, "haz": 6,
+  "temmuz": 7, "tem": 7,
+  "ağustos": 8, "ağu": 8,
+  "eylül": 9, "eyl": 9,
+  "ekim": 10, "eki": 10,
+  "kasım": 11, "kas": 11,
+  "aralık": 12, "ara": 12,
+  "january": 1, "jan": 1,
+  "february": 2, "feb": 2,
+  "march": 3, "mar": 3,
+  "april": 4, "apr": 4,
+  "may": 5,
+  "june": 6, "jun": 6,
+  "july": 7, "jul": 7,
+  "august": 8, "aug": 8,
+  "september": 9, "sep": 9,
+  "october": 10, "oct": 10,
+  "november": 11, "nov": 11,
+  "december": 12, "dec": 12,
+};
+
+function expandYear(yearStr: string): number {
+  const year = parseInt(yearStr, 10);
+  if (year < 100) {
+    // Two-digit year: 24 -> 2024, 99 -> 1999
+    return year >= 0 && year <= 50 ? 2000 + year : 1900 + year;
+  }
+  return year;
+}
+
+function parseMonthDate(dateValue: unknown): { year: number; month: number } | null {
+  if (dateValue === null || dateValue === undefined || dateValue === "") {
+    return null;
+  }
+
+  // Handle Excel date serial number
+  if (typeof dateValue === "number") {
+    // Excel date serial: days since 1899-12-30
+    // A value like 45292 would be a date in 2024
+    if (dateValue > 1000) {
+      const date = new Date((dateValue - 25569) * 86400 * 1000);
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      if (year >= 2000 && year <= 2100 && month >= 1 && month <= 12) {
+        return { year, month };
+      }
+    }
+    return null;
+  }
+
+  if (typeof dateValue !== "string") {
+    return null;
+  }
+
+  // Use Turkish locale for proper case folding of Turkish characters (İ/ı, I/i)
+  const str = String(dateValue).trim().toLocaleLowerCase('tr-TR');
+  
+  // Skip common header values
+  if (str === "aylar" || str === "ay" || str === "month" || str === "tarih" || str === "date") {
+    return null;
+  }
+
+  // Try ISO format: YYYY-MM or YYYY-MM-DD
+  const isoMatch = str.match(/^(\d{4})[./-](\d{1,2})/);
+  if (isoMatch) {
+    return { year: parseInt(isoMatch[1], 10), month: parseInt(isoMatch[2], 10) };
+  }
+
+  // Try MM/YYYY or MM-YYYY or MM.YYYY (4-digit year)
+  const mmYYYYMatch = str.match(/^(\d{1,2})[./-](\d{4})$/);
+  if (mmYYYYMatch) {
+    return { year: parseInt(mmYYYYMatch[2], 10), month: parseInt(mmYYYYMatch[1], 10) };
+  }
+
+  // Try MM/YY or MM-YY or MM.YY (2-digit year)
+  const mmYYMatch = str.match(/^(\d{1,2})[./-](\d{2})$/);
+  if (mmYYMatch) {
+    const month = parseInt(mmYYMatch[1], 10);
+    const year = expandYear(mmYYMatch[2]);
+    if (month >= 1 && month <= 12) {
+      return { year, month };
+    }
+  }
+
+  // Try Turkish month names with various patterns
+  for (const [monthName, monthNum] of Object.entries(turkishMonths)) {
+    // "Ocak 2025" or "Ocak 25" or "Ocak-2025" or "Ocak-25"
+    const pattern1 = new RegExp(`^${monthName}[\\s-]*(\\d{2,4})$`, "i");
+    const match1 = str.match(pattern1);
+    if (match1) {
+      return { year: expandYear(match1[1]), month: monthNum };
+    }
+    // "2025 Ocak" or "25 Ocak" or "2025-Ocak" or "25-Ocak"
+    const pattern2 = new RegExp(`^(\\d{2,4})[\\s-]*${monthName}$`, "i");
+    const match2 = str.match(pattern2);
+    if (match2) {
+      return { year: expandYear(match2[1]), month: monthNum };
+    }
+  }
+
+  return null;
+}
+
 export function validateWorkSchedule(
   jsonData: unknown[][]
 ): ValidationResult<WorkScheduleRow> {
@@ -558,6 +668,9 @@ export function validateWorkSchedule(
     return { validItems, errors, warnings };
   }
 
+  let skippedRows = 0;
+  const unparsedRows: { row: number; value: unknown }[] = [];
+
   // Process data rows (starting from row 1)
   for (let rowIndex = 1; rowIndex < jsonData.length; rowIndex++) {
     const row = jsonData[rowIndex] as (number | string | null)[];
@@ -566,44 +679,26 @@ export function validateWorkSchedule(
     if (!row || row.length === 0) continue;
 
     const dateValue = row[0];
-    if (dateValue === null || dateValue === undefined) continue;
+    
+    // Skip completely empty first cell
+    if (dateValue === null || dateValue === undefined || dateValue === "") {
+      continue;
+    }
+    
+    const parsed = parseMonthDate(dateValue);
 
-    // Parse Excel date serial number to year and month
-    let year: number;
-    let month: number;
-
-    if (typeof dateValue === "number") {
-      // Excel date serial number
-      const date = new Date((dateValue - 25569) * 86400 * 1000);
-      year = date.getFullYear();
-      month = date.getMonth() + 1; // 1-indexed month
-    } else if (typeof dateValue === "string") {
-      // Try parsing YYYY-MM or similar format
-      const match = String(dateValue).match(/^(\d{4})-(\d{1,2})/);
-      if (match) {
-        year = parseInt(match[1], 10);
-        month = parseInt(match[2], 10);
-      } else {
-        errors.push({
-          row: rowNum,
-          field: "Aylar",
-          value: dateValue,
-          message: "Tarih formatı tanınamadı. Beklenen: Excel tarih veya YYYY-MM formatı",
-        });
-        continue;
-      }
-    } else {
+    // If we can't parse the date, track it for reporting
+    if (!parsed) {
+      skippedRows++;
+      unparsedRows.push({ row: rowNum, value: dateValue });
       continue;
     }
 
-    // Validate year and month
+    const { year, month } = parsed;
+
+    // Validate year and month range
     if (year < 2000 || year > 2100 || month < 1 || month > 12) {
-      errors.push({
-        row: rowNum,
-        field: "Aylar",
-        value: dateValue,
-        message: `Geçersiz tarih: ${year}-${month}`,
-      });
+      skippedRows++;
       continue;
     }
 
@@ -621,8 +716,8 @@ export function validateWorkSchedule(
       if (typeof quantityValue === "number") {
         plannedQuantity = quantityValue;
       } else {
-        const parsed = parseFloat(String(quantityValue).replace(",", "."));
-        if (isNaN(parsed)) {
+        const parsedNum = parseFloat(String(quantityValue).replace(",", "."));
+        if (isNaN(parsedNum)) {
           errors.push({
             row: rowNum,
             field: workItemName,
@@ -631,7 +726,7 @@ export function validateWorkSchedule(
           });
           continue;
         }
-        plannedQuantity = parsed;
+        plannedQuantity = parsedNum;
       }
 
       if (plannedQuantity < 0) {
@@ -644,17 +739,28 @@ export function validateWorkSchedule(
         continue;
       }
 
-      validItems.push({
-        workItemName,
-        year,
-        month,
-        plannedQuantity,
-      });
+      // Only add if quantity > 0 (skip zero values)
+      if (plannedQuantity > 0) {
+        validItems.push({
+          workItemName,
+          year,
+          month,
+          plannedQuantity,
+        });
+      }
     }
   }
 
+  // Add warnings about skipped rows
+  if (skippedRows > 0) {
+    const exampleRows = unparsedRows.slice(0, 3).map(r => `Satır ${r.row}: "${r.value}"`).join(", ");
+    warnings.push(`${skippedRows} satır tarih formatı tanınamadığı için atlandı (${exampleRows}). Beklenen format: Excel tarih, 01/24, YYYY-MM, veya "Ocak 2025".`);
+  }
+
   if (validItems.length === 0 && errors.length === 0) {
-    warnings.push("İş programında geçerli veri bulunamadı.");
+    if (warnings.length === 0) {
+      warnings.push("İş programında geçerli veri bulunamadı.");
+    }
   }
 
   return { validItems, errors, warnings };

@@ -1,6 +1,7 @@
+import { useState, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { z } from "zod";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -32,11 +33,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Loader2, Save, Trash2 } from "lucide-react";
+import { Loader2, Save, Trash2, Upload, FileSpreadsheet, CheckCircle2, AlertCircle } from "lucide-react";
 import { useLocation } from "wouter";
-import type { Project } from "@shared/schema";
+import * as XLSX from "xlsx";
+import { validateWorkSchedule, formatValidationSummary } from "@/lib/excelValidation";
+import type { Project, MonthlyWorkItemSchedule } from "@shared/schema";
 
 const projectSettingsSchema = z.object({
   name: z.string().min(1, "Proje adı zorunludur"),
@@ -58,6 +62,14 @@ interface ProjectSettingsTabProps {
 export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [workScheduleFile, setWorkScheduleFile] = useState<File | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Fetch existing work schedule
+  const { data: workSchedule } = useQuery<MonthlyWorkItemSchedule[]>({
+    queryKey: [`/api/projects/${project.id}/work-schedule`],
+  });
 
   const form = useForm<ProjectSettingsFormValues>({
     resolver: zodResolver(projectSettingsSchema),
@@ -119,6 +131,88 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
 
   const onSubmit = (values: ProjectSettingsFormValues) => {
     updateProjectMutation.mutate(values);
+  };
+
+  // Work schedule upload mutation
+  const workScheduleMutation = useMutation({
+    mutationFn: async (items: { workItemName: string; year: number; month: number; plannedQuantity: number }[]) => {
+      return await apiRequest("POST", `/api/projects/${project.id}/work-schedule/bulk`, { items });
+    },
+    onSuccess: () => {
+      setUploadStatus({ success: true, message: "İş programı başarıyla yüklendi." });
+      setWorkScheduleFile(null);
+      toast({
+        title: "İş Programı Yüklendi",
+        description: "İş programı başarıyla içe aktarıldı.",
+      });
+      queryClient.invalidateQueries({ queryKey: [`/api/projects/${project.id}/work-schedule`] });
+    },
+    onError: (error: Error) => {
+      setUploadStatus({ success: false, message: error.message || "İş programı yüklenirken bir hata oluştu." });
+      toast({
+        title: "Hata",
+        description: error.message || "İş programı yüklenirken bir hata oluştu.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleWorkScheduleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setWorkScheduleFile(file);
+    setUploadStatus(null);
+
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data, { type: "array" });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as unknown[][];
+
+      const result = validateWorkSchedule(jsonData);
+
+      if (result.errors.length > 0) {
+        const errorMessages = result.errors.slice(0, 5).map(e => `Satır ${e.row}: ${e.message}`).join("\n");
+        setUploadStatus({ success: false, message: `Doğrulama hataları:\n${errorMessages}` });
+        return;
+      }
+
+      // Final guard: never call API with empty items
+      if (result.validItems.length === 0) {
+        let message = "Geçerli veri bulunamadı.";
+        if (result.warnings.length > 0) {
+          message = result.warnings.join("\n");
+        }
+        if (result.errors.length > 0) {
+          message += `\n\nHatalar:\n${result.errors.slice(0, 3).map(e => `Satır ${e.row}: ${e.message}`).join("\n")}`;
+        }
+        setUploadStatus({ success: false, message });
+        // No toast here - only show the alert with error details
+        return;
+      }
+
+      // Build validation summary
+      const uniqueWorkItems = new Set(result.validItems.map(i => i.workItemName));
+      const uniqueMonths = new Set(result.validItems.map(i => `${i.year}-${i.month}`));
+      
+      let summary = `${result.validItems.length} kayıt, ${uniqueWorkItems.size} imalat kalemi, ${uniqueMonths.size} ay bulundu.`;
+      if (result.warnings.length > 0) {
+        summary += ` (${result.warnings.length} uyarı)`;
+        // Also set status to show warnings in the UI
+        setUploadStatus({ success: true, message: `Uyarılar:\n${result.warnings.join("\n")}` });
+      }
+
+      // Upload the validated items - toast only fires here when we're actually uploading
+      toast({
+        title: "Yükleniyor",
+        description: summary,
+      });
+      workScheduleMutation.mutate(result.validItems);
+    } catch (error) {
+      setUploadStatus({ success: false, message: "Excel dosyası okunamadı." });
+    }
   };
 
   return (
@@ -296,6 +390,78 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
               </div>
             </form>
           </Form>
+        </CardContent>
+      </Card>
+
+      {/* Work Schedule Upload Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <FileSpreadsheet className="h-5 w-5" />
+            İş Programı (Aylık Plan)
+          </CardTitle>
+          <CardDescription>
+            Aylık iş programı Excel dosyasını yükleyerek planlanan miktarları içe aktarın
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Existing schedule info */}
+          {workSchedule && workSchedule.length > 0 && (
+            <Alert>
+              <CheckCircle2 className="h-4 w-4" />
+              <AlertDescription>
+                Mevcut iş programında {workSchedule.length} kayıt var.
+                Yeni dosya yüklerseniz mevcut program silinip yeni verilerle değiştirilecektir.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* File upload */}
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              Excel dosyası formatı: İlk sütun aylar (Excel tarih formatı), diğer sütunlar imalat kalemi adları ve aylık planlanan miktarlar
+            </p>
+            <div className="flex items-center gap-2">
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                ref={fileInputRef}
+                onChange={handleWorkScheduleFileChange}
+                className="hidden"
+                data-testid="input-work-schedule-file"
+              />
+              <Button
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={workScheduleMutation.isPending}
+                data-testid="button-upload-work-schedule"
+              >
+                {workScheduleMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4 mr-2" />
+                )}
+                Excel Dosyası Seç
+              </Button>
+              {workScheduleFile && (
+                <span className="text-sm text-muted-foreground">{workScheduleFile.name}</span>
+              )}
+            </div>
+          </div>
+
+          {/* Upload status */}
+          {uploadStatus && (
+            <Alert variant={uploadStatus.success ? "default" : "destructive"}>
+              {uploadStatus.success ? (
+                <CheckCircle2 className="h-4 w-4" />
+              ) : (
+                <AlertCircle className="h-4 w-4" />
+              )}
+              <AlertDescription className="whitespace-pre-line">
+                {uploadStatus.message}
+              </AlertDescription>
+            </Alert>
+          )}
         </CardContent>
       </Card>
 

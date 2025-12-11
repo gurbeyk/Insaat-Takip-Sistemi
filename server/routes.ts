@@ -302,6 +302,11 @@ export async function registerRoutes(
       
       const items = req.body.items as any[];
       
+      // Guard: reject empty arrays to prevent accidentally wiping existing schedules
+      if (!items || items.length === 0) {
+        return res.status(400).json({ message: "En az bir kayıt gerekli. Boş veri gönderilemez." });
+      }
+      
       // Delete existing schedule for this project before importing new one
       await storage.deleteMonthlyWorkItemSchedule(projectId);
       
