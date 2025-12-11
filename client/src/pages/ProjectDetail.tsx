@@ -67,6 +67,75 @@ export default function ProjectDetail() {
     }
   };
 
+  // Calculate current month's statistics - must be before any early returns
+  const currentMonthStats = useMemo(() => {
+    if (!project) {
+      return {
+        monthName: "",
+        year: 0,
+        spentMH: 0,
+        pouredConcrete: 0,
+        progressMH: 0,
+        earnedMH: 0,
+        efficiency: 0,
+      };
+    }
+    
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0-indexed
+    
+    // Create a map of workItemId -> targetManHours (birim adam saat)
+    const workItemUnitManHours = new Map<string, number>();
+    const workItemUnits = new Map<string, string>();
+    project.workItems?.forEach((item) => {
+      workItemUnitManHours.set(item.id, item.targetManHours || 0);
+      workItemUnits.set(item.id, item.unit || "");
+    });
+    
+    let monthlySpentMH = 0;
+    let monthlyPouredConcrete = 0;
+    let monthlyEarnedMH = 0;
+    
+    project.dailyEntries?.forEach((entry) => {
+      const entryDate = new Date(entry.entryDate);
+      if (entryDate.getFullYear() === currentYear && entryDate.getMonth() === currentMonth) {
+        monthlySpentMH += entry.manHours || 0;
+        
+        // Poured concrete - check if unit is m3
+        const unit = workItemUnits.get(entry.workItemId) || "";
+        if (unit === "m3") {
+          monthlyPouredConcrete += entry.quantity || 0;
+        }
+        
+        // Earned man-hours: quantity × unit man-hours
+        const unitMH = workItemUnitManHours.get(entry.workItemId) || 0;
+        monthlyEarnedMH += (entry.quantity || 0) * unitMH;
+      }
+    });
+    
+    // İlerleme MH = harcanan / dökülen beton
+    const progressMH = monthlyPouredConcrete > 0 ? monthlySpentMH / monthlyPouredConcrete : 0;
+    
+    // Verimlilik % = kazanılan / gerçekleşen × 100
+    const efficiency = monthlySpentMH > 0 ? (monthlyEarnedMH / monthlySpentMH) * 100 : 0;
+    
+    // Get Turkish month name
+    const monthNames = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", 
+                        "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+    const monthName = monthNames[currentMonth];
+    
+    return {
+      monthName,
+      year: currentYear,
+      spentMH: monthlySpentMH,
+      pouredConcrete: monthlyPouredConcrete,
+      progressMH,
+      earnedMH: monthlyEarnedMH,
+      efficiency,
+    };
+  }, [project]);
+
   if (isLoading) {
     return (
       <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -140,63 +209,6 @@ export default function ProjectDetail() {
     project.elapsedDays || 0,
     project.totalDuration || 0
   );
-
-  // Calculate current month's statistics
-  const currentMonthStats = useMemo(() => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth(); // 0-indexed
-    
-    // Create a map of workItemId -> targetManHours (birim adam saat)
-    const workItemUnitManHours = new Map<string, number>();
-    const workItemUnits = new Map<string, string>();
-    project.workItems?.forEach((item) => {
-      workItemUnitManHours.set(item.id, item.targetManHours || 0);
-      workItemUnits.set(item.id, item.unit || "");
-    });
-    
-    let monthlySpentMH = 0;
-    let monthlyPouredConcrete = 0;
-    let monthlyEarnedMH = 0;
-    
-    project.dailyEntries?.forEach((entry) => {
-      const entryDate = new Date(entry.entryDate);
-      if (entryDate.getFullYear() === currentYear && entryDate.getMonth() === currentMonth) {
-        monthlySpentMH += entry.manHours || 0;
-        
-        // Poured concrete - check if unit is m3
-        const unit = workItemUnits.get(entry.workItemId) || "";
-        if (unit === "m3") {
-          monthlyPouredConcrete += entry.quantity || 0;
-        }
-        
-        // Earned man-hours: quantity × unit man-hours
-        const unitMH = workItemUnitManHours.get(entry.workItemId) || 0;
-        monthlyEarnedMH += (entry.quantity || 0) * unitMH;
-      }
-    });
-    
-    // İlerleme MH = harcanan / dökülen beton
-    const progressMH = monthlyPouredConcrete > 0 ? monthlySpentMH / monthlyPouredConcrete : 0;
-    
-    // Verimlilik % = kazanılan / gerçekleşen × 100
-    const efficiency = monthlySpentMH > 0 ? (monthlyEarnedMH / monthlySpentMH) * 100 : 0;
-    
-    // Get Turkish month name
-    const monthNames = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", 
-                        "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
-    const monthName = monthNames[currentMonth];
-    
-    return {
-      monthName,
-      year: currentYear,
-      spentMH: monthlySpentMH,
-      pouredConcrete: monthlyPouredConcrete,
-      progressMH,
-      earnedMH: monthlyEarnedMH,
-      efficiency,
-    };
-  }, [project.dailyEntries, project.workItems]);
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
