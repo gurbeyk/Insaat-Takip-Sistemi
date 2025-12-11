@@ -19,6 +19,17 @@ import {
   BarChart3,
   AlertCircle,
   RefreshCw,
+  Sun,
+  Cloud,
+  CloudRain,
+  CloudSnow,
+  CloudFog,
+  CloudLightning,
+  CloudDrizzle,
+  CloudSun,
+  Snowflake,
+  MapPin,
+  Thermometer,
 } from "lucide-react";
 import { DataEntryTab } from "@/components/DataEntryTab";
 import { ReportsTab } from "@/components/ReportsTab";
@@ -34,6 +45,38 @@ interface ProjectWithDetails extends Project {
   dailyEntries: DailyEntry[];
 }
 
+interface WeatherData {
+  location: {
+    name: string;
+    country: string;
+    latitude: number;
+    longitude: number;
+  };
+  current: {
+    temperature: number;
+    description: string;
+    icon: string;
+    isDay: boolean;
+  };
+  today: {
+    tempMax: number;
+    tempMin: number;
+    precipitation: number;
+    precipitationProbability: number;
+    description: string;
+    icon: string;
+  };
+  forecast: Array<{
+    date: string;
+    tempMax: number;
+    tempMin: number;
+    precipitation: number;
+    precipitationProbability: number;
+    description: string;
+    icon: string;
+  }>;
+}
+
 export default function ProjectDetail() {
   const params = useParams<{ id: string }>();
   const [activeTab, setActiveTab] = useState("overview");
@@ -41,6 +84,18 @@ export default function ProjectDetail() {
   const { data: project, isLoading, error, refetch } = useQuery<ProjectWithDetails>({
     queryKey: [`/api/projects/${params.id}`],
     enabled: !!params.id,
+  });
+
+  const { data: weather, isLoading: weatherLoading } = useQuery<WeatherData>({
+    queryKey: ['/api/weather', project?.location],
+    queryFn: async () => {
+      if (!project?.location) return null;
+      const response = await fetch(`/api/weather/${encodeURIComponent(project.location)}`);
+      if (!response.ok) throw new Error('Weather fetch failed');
+      return response.json();
+    },
+    enabled: !!project?.location,
+    staleTime: 1000 * 60 * 30, // 30 minutes cache
   });
 
   const calculateProgress = (spent: number, planned: number) => {
@@ -65,6 +120,41 @@ export default function ProjectDetail() {
       default:
         return null;
     }
+  };
+
+  const getWeatherIcon = (icon: string, size: string = "h-8 w-8") => {
+    const iconProps = { className: `${size} text-primary` };
+    switch (icon) {
+      case "sun":
+        return <Sun {...iconProps} className={`${size} text-yellow-500`} />;
+      case "cloud-sun":
+        return <CloudSun {...iconProps} className={`${size} text-yellow-400`} />;
+      case "cloud":
+        return <Cloud {...iconProps} className={`${size} text-gray-400`} />;
+      case "cloud-fog":
+        return <CloudFog {...iconProps} className={`${size} text-gray-500`} />;
+      case "cloud-drizzle":
+        return <CloudDrizzle {...iconProps} className={`${size} text-blue-400`} />;
+      case "cloud-rain":
+        return <CloudRain {...iconProps} className={`${size} text-blue-500`} />;
+      case "snowflake":
+        return <Snowflake {...iconProps} className={`${size} text-blue-300`} />;
+      case "cloud-lightning":
+        return <CloudLightning {...iconProps} className={`${size} text-yellow-600`} />;
+      default:
+        return <Cloud {...iconProps} className={`${size} text-gray-400`} />;
+    }
+  };
+
+  const formatTurkishDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const days = ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"];
+    const months = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
+    return {
+      day: days[date.getDay()],
+      date: date.getDate(),
+      month: months[date.getMonth()],
+    };
   };
 
   // Calculate current month's statistics - must be before any early returns
@@ -210,6 +300,14 @@ export default function ProjectDetail() {
     project.totalDuration || 0
   );
 
+  // Format today's date in Turkish
+  const todayFormatted = (() => {
+    const now = new Date();
+    const days = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
+    const months = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+    return `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}, ${days[now.getDay()]}`;
+  })();
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex flex-wrap items-center gap-4">
@@ -229,8 +327,12 @@ export default function ProjectDetail() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
+      {/* Stats and Weather Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6">
+        {/* Left side - Stats */}
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
               <div className="p-3 rounded-lg bg-primary/10">
@@ -398,6 +500,75 @@ export default function ProjectDetail() {
             </CardContent>
           </Card>
         </div>
+      </div>
+        </div>
+
+        {/* Right side - Weather Widget */}
+        {project.location && (
+          <div className="lg:w-[280px]">
+            <Card className="sticky top-6" data-testid="card-weather">
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <MapPin className="h-4 w-4" />
+                  <span>{weather?.location?.name || project.location}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">{todayFormatted}</p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {weatherLoading ? (
+                  <div className="space-y-3">
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-24 w-full" />
+                  </div>
+                ) : weather ? (
+                  <>
+                    {/* Current Weather */}
+                    <div className="flex items-center gap-4" data-testid="weather-current">
+                      {getWeatherIcon(weather.today.icon, "h-12 w-12")}
+                      <div>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-3xl font-bold">{weather.current.temperature}°</span>
+                          <span className="text-sm text-muted-foreground">{weather.today.description}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Thermometer className="h-3 w-3" />
+                          <span>{weather.today.tempMax}° / {weather.today.tempMin}°</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 7-day Forecast */}
+                    <div className="border-t pt-3" data-testid="weather-forecast">
+                      <p className="text-xs font-medium text-muted-foreground mb-2">7 Günlük Tahmin</p>
+                      <div className="space-y-2">
+                        {weather.forecast.map((day, idx) => {
+                          const dateInfo = formatTurkishDate(day.date);
+                          return (
+                            <div key={idx} className="flex items-center justify-between text-sm">
+                              <div className="flex items-center gap-2 w-16">
+                                <span className="text-muted-foreground">{dateInfo.day}</span>
+                                <span className="text-xs">{dateInfo.date}</span>
+                              </div>
+                              {getWeatherIcon(day.icon, "h-5 w-5")}
+                              <div className="flex items-center gap-1 w-16 justify-end">
+                                <span className="font-medium">{day.tempMax}°</span>
+                                <span className="text-muted-foreground">{day.tempMin}°</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    Hava durumu bilgisi alınamadı
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
