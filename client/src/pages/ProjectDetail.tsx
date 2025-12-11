@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -141,6 +141,63 @@ export default function ProjectDetail() {
     project.totalDuration || 0
   );
 
+  // Calculate current month's statistics
+  const currentMonthStats = useMemo(() => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth(); // 0-indexed
+    
+    // Create a map of workItemId -> targetManHours (birim adam saat)
+    const workItemUnitManHours = new Map<string, number>();
+    const workItemUnits = new Map<string, string>();
+    project.workItems?.forEach((item) => {
+      workItemUnitManHours.set(item.id, item.targetManHours || 0);
+      workItemUnits.set(item.id, item.unit || "");
+    });
+    
+    let monthlySpentMH = 0;
+    let monthlyPouredConcrete = 0;
+    let monthlyEarnedMH = 0;
+    
+    project.dailyEntries?.forEach((entry) => {
+      const entryDate = new Date(entry.entryDate);
+      if (entryDate.getFullYear() === currentYear && entryDate.getMonth() === currentMonth) {
+        monthlySpentMH += entry.manHours || 0;
+        
+        // Poured concrete - check if unit is m3
+        const unit = workItemUnits.get(entry.workItemId) || "";
+        if (unit === "m3") {
+          monthlyPouredConcrete += entry.quantity || 0;
+        }
+        
+        // Earned man-hours: quantity × unit man-hours
+        const unitMH = workItemUnitManHours.get(entry.workItemId) || 0;
+        monthlyEarnedMH += (entry.quantity || 0) * unitMH;
+      }
+    });
+    
+    // İlerleme MH = harcanan / dökülen beton
+    const progressMH = monthlyPouredConcrete > 0 ? monthlySpentMH / monthlyPouredConcrete : 0;
+    
+    // Verimlilik % = kazanılan / gerçekleşen × 100
+    const efficiency = monthlySpentMH > 0 ? (monthlyEarnedMH / monthlySpentMH) * 100 : 0;
+    
+    // Get Turkish month name
+    const monthNames = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", 
+                        "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+    const monthName = monthNames[currentMonth];
+    
+    return {
+      monthName,
+      year: currentYear,
+      spentMH: monthlySpentMH,
+      pouredConcrete: monthlyPouredConcrete,
+      progressMH,
+      earnedMH: monthlyEarnedMH,
+      efficiency,
+    };
+  }, [project.dailyEntries, project.workItems]);
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
       <div className="flex flex-wrap items-center gap-4">
@@ -253,6 +310,82 @@ export default function ProjectDetail() {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Current Month Stats Section */}
+      <div className="space-y-2">
+        <h3 className="text-sm font-medium text-muted-foreground">
+          {currentMonthStats.monthName} {currentMonthStats.year} - Aylık Performans
+        </h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-4">
+                <div className="p-3 rounded-lg bg-primary/10">
+                  <Users className="h-6 w-6 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-2xl font-bold truncate" data-testid="text-monthly-spent-mh">
+                    {currentMonthStats.spentMH.toLocaleString("tr-TR", { maximumFractionDigits: 0 })}
+                  </p>
+                  <p className="text-sm text-muted-foreground">Aylık Harcanan MH</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-4">
+                <div className="p-3 rounded-lg bg-blue-500/10">
+                  <Building2 className="h-6 w-6 text-blue-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-2xl font-bold truncate" data-testid="text-monthly-concrete">
+                    {currentMonthStats.pouredConcrete.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-sm text-muted-foreground">Aylık Dökülen Beton (m³)</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-4">
+                <div className="p-3 rounded-lg bg-green-500/10">
+                  <TrendingUp className="h-6 w-6 text-green-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-2xl font-bold truncate" data-testid="text-monthly-progress-mh">
+                    {currentMonthStats.pouredConcrete > 0
+                      ? currentMonthStats.progressMH.toLocaleString("tr-TR", { maximumFractionDigits: 2 })
+                      : "-"}
+                  </p>
+                  <p className="text-sm text-muted-foreground">Aylık İlerleme MH</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-4">
+                <div className="p-3 rounded-lg bg-orange-500/10">
+                  <BarChart3 className="h-6 w-6 text-orange-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-2xl font-bold truncate" data-testid="text-monthly-efficiency">
+                    {currentMonthStats.spentMH > 0
+                      ? `%${currentMonthStats.efficiency.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}`
+                      : "-"}
+                  </p>
+                  <p className="text-sm text-muted-foreground">Verimlilik</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
