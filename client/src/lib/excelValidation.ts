@@ -514,13 +514,15 @@ export interface WorkScheduleRow {
   plannedQuantity: number;
 }
 
-// Turkish month names mapping
-const turkishMonths: Record<string, number> = {
+// Month names mapping (Turkish and English)
+// Note: "mar" maps to March (3), "may" maps to May (5) - shared between languages
+const monthNames: Record<string, number> = {
+  // Turkish months
   "ocak": 1, "oca": 1,
   "şubat": 2, "şub": 2,
-  "mart": 3, "mar": 3,
+  "mart": 3,
   "nisan": 4, "nis": 4,
-  "mayıs": 5, "may": 5,
+  "mayıs": 5,
   "haziran": 6, "haz": 6,
   "temmuz": 7, "tem": 7,
   "ağustos": 8, "ağu": 8,
@@ -528,6 +530,7 @@ const turkishMonths: Record<string, number> = {
   "ekim": 10, "eki": 10,
   "kasım": 11, "kas": 11,
   "aralık": 12, "ara": 12,
+  // English months
   "january": 1, "jan": 1,
   "february": 2, "feb": 2,
   "march": 3, "mar": 3,
@@ -606,7 +609,7 @@ function parseMonthDate(dateValue: unknown): { year: number; month: number } | n
   }
 
   // Try Turkish month names with various patterns
-  for (const [monthName, monthNum] of Object.entries(turkishMonths)) {
+  for (const [monthName, monthNum] of Object.entries(monthNames)) {
     // "Ocak 2025" or "Ocak 25" or "Ocak-2025" or "Ocak-25"
     const pattern1 = new RegExp(`^${monthName}[\\s-]*(\\d{2,4})$`, "i");
     const match1 = str.match(pattern1);

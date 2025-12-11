@@ -54,6 +54,7 @@ Preferred communication style: Simple, everyday language.
 - `workItems`: Individual work items within projects (budget code, unit, targets)
 - `dailyEntries`: Daily progress records (man-hours, quantities)
 - `monthlySchedule`: Monthly planning data
+- `monthlyWorkItemSchedule`: Work item monthly planned quantities (İş Programı) with year/month/workItemId/plannedQuantity
 - `projectMembers`: Project access control
 - `sessions`: Authentication session storage
 
@@ -84,6 +85,12 @@ Preferred communication style: Simple, everyday language.
 
 ### Data Processing
 - **xlsx**: Excel file parsing for bulk data import/export
+
+### Work Schedule (İş Programı) Excel Import
+- Supports multiple date formats: Excel serial dates, ISO (YYYY-MM), Turkish month names (Ocak, Şubat, etc.), English month names, and short formats (01/24, 01-24)
+- Uses Turkish locale-safe normalization for character handling (İ/ı)
+- Validation with detailed error feedback showing skipped rows with examples
+- Frontend and backend guards prevent empty uploads from wiping existing data
 
 ### Charting
 - **Recharts**: Data visualization for reports (line, bar, area charts)
