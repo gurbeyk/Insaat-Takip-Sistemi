@@ -113,6 +113,20 @@ export const projectMembers = pgTable("project_members", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Project invitations (Proje Davetleri)
+export const projectInvitations = pgTable("project_invitations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  email: varchar("email").notNull(),
+  name: varchar("name").notNull(),
+  role: varchar("role").notNull().default("viewer"), // 'admin', 'editor', 'viewer'
+  token: varchar("token").notNull().unique(),
+  status: varchar("status").notNull().default("pending"), // 'pending', 'accepted', 'expired'
+  expiresAt: timestamp("expires_at").notNull(),
+  createdBy: varchar("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   projects: many(projects),
@@ -180,6 +194,17 @@ export const projectMembersRelations = relations(projectMembers, ({ one }) => ({
   }),
 }));
 
+export const projectInvitationsRelations = relations(projectInvitations, ({ one }) => ({
+  project: one(projects, {
+    fields: [projectInvitations.projectId],
+    references: [projects.id],
+  }),
+  createdByUser: one(users, {
+    fields: [projectInvitations.createdBy],
+    references: [users.id],
+  }),
+}));
+
 // Insert Schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -219,6 +244,11 @@ export const insertProjectMemberSchema = createInsertSchema(projectMembers).omit
   createdAt: true,
 });
 
+export const insertProjectInvitationSchema = createInsertSchema(projectInvitations).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -241,3 +271,6 @@ export type InsertMonthlyWorkItemSchedule = z.infer<typeof insertMonthlyWorkItem
 
 export type ProjectMember = typeof projectMembers.$inferSelect;
 export type InsertProjectMember = z.infer<typeof insertProjectMemberSchema>;
+
+export type ProjectInvitation = typeof projectInvitations.$inferSelect;
+export type InsertProjectInvitation = z.infer<typeof insertProjectInvitationSchema>;
