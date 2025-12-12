@@ -33,8 +33,9 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Users, UserPlus, Crown, Shield, Eye, Trash2 } from "lucide-react";
-import type { Project, User, ProjectMember } from "@shared/schema";
+import { Users, UserPlus, Crown, Shield, Eye, Trash2, Link2, Copy, Check, Mail, Clock } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import type { Project, User, ProjectMember, ProjectInvitation } from "@shared/schema";
 
 interface ProjectMemberWithUser extends ProjectMember {
   user: User | null;
@@ -61,6 +62,11 @@ export function TeamTab({ project }: TeamTabProps) {
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [selectedRole, setSelectedRole] = useState<string>("viewer");
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteName, setInviteName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("viewer");
+  const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
   const { data: membersData, isLoading: membersLoading } = useQuery<MembersResponse>({
     queryKey: ["/api/projects", project.id, "members"],
@@ -73,6 +79,82 @@ export function TeamTab({ project }: TeamTabProps) {
   const { data: allUsers, isLoading: usersLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
   });
+
+  const { data: invitations } = useQuery<ProjectInvitation[]>({
+    queryKey: ["/api/projects", project.id, "invitations"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/projects/${project.id}/invitations`);
+      return res.json();
+    },
+  });
+
+  const createInvitationMutation = useMutation({
+    mutationFn: async ({ name, email, role }: { name: string; email: string; role: string }) => {
+      const res = await apiRequest("POST", `/api/projects/${project.id}/invitations`, {
+        name,
+        email,
+        role,
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || "Failed to create invitation");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id, "invitations"] });
+      setInviteOpen(false);
+      setInviteName("");
+      setInviteEmail("");
+      setInviteRole("viewer");
+      toast({
+        title: "Davet oluşturuldu",
+        description: "Davet linki hazır. Linki kopyalayıp paylaşabilirsiniz.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Hata",
+        description: error.message || "Davet oluşturulurken bir hata oluştu.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteInvitationMutation = useMutation({
+    mutationFn: async (invitationId: string) => {
+      const res = await apiRequest("DELETE", `/api/projects/${project.id}/invitations/${invitationId}`);
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || "Failed to delete invitation");
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id, "invitations"] });
+      toast({
+        title: "Davet silindi",
+        description: "Davet başarıyla silindi.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Hata",
+        description: error.message || "Davet silinirken bir hata oluştu.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const copyInviteLink = (token: string) => {
+    const link = `${window.location.origin}/invite/${token}`;
+    navigator.clipboard.writeText(link);
+    setCopiedToken(token);
+    setTimeout(() => setCopiedToken(null), 2000);
+    toast({
+      title: "Link kopyalandı",
+      description: "Davet linki panoya kopyalandı.",
+    });
+  };
 
   const addMemberMutation = useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
@@ -205,13 +287,100 @@ export function TeamTab({ project }: TeamTabProps) {
         </div>
         
         {membersData?.isAdmin && (
-          <Dialog open={addMemberOpen} onOpenChange={setAddMemberOpen}>
-            <DialogTrigger asChild>
-              <Button data-testid="button-add-member">
-                <UserPlus className="h-4 w-4 mr-2" />
-                Üye Ekle
-              </Button>
-            </DialogTrigger>
+          <div className="flex flex-wrap gap-2">
+            <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" data-testid="button-create-invite">
+                  <Link2 className="h-4 w-4 mr-2" />
+                  Davet Linki Oluştur
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Davet Linki Oluştur</DialogTitle>
+                  <DialogDescription>
+                    Kişinin bilgilerini girin ve rol seçin. Oluşturulan linki kopyalayıp paylaşabilirsiniz.
+                  </DialogDescription>
+                </DialogHeader>
+                
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">İsim</label>
+                    <Input
+                      placeholder="Örn: Ahmet Yılmaz"
+                      value={inviteName}
+                      onChange={(e) => setInviteName(e.target.value)}
+                      data-testid="input-invite-name"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">E-posta</label>
+                    <Input
+                      type="email"
+                      placeholder="ornek@email.com"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      data-testid="input-invite-email"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Rol</label>
+                    <Select value={inviteRole} onValueChange={setInviteRole}>
+                      <SelectTrigger data-testid="select-invite-role">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="admin">
+                          <div className="flex items-center gap-2">
+                            <Shield className="h-4 w-4" />
+                            <span>Yönetici</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="editor">
+                          <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4" />
+                            <span>Editör</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="viewer">
+                          <div className="flex items-center gap-2">
+                            <Eye className="h-4 w-4" />
+                            <span>Görüntüleyici</span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setInviteOpen(false)}>
+                    İptal
+                  </Button>
+                  <Button
+                    onClick={() => createInvitationMutation.mutate({ 
+                      name: inviteName, 
+                      email: inviteEmail, 
+                      role: inviteRole 
+                    })}
+                    disabled={!inviteName || !inviteEmail || createInvitationMutation.isPending}
+                    data-testid="button-confirm-create-invite"
+                  >
+                    {createInvitationMutation.isPending ? "Oluşturuluyor..." : "Oluştur"}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+            
+            <Dialog open={addMemberOpen} onOpenChange={setAddMemberOpen}>
+              <DialogTrigger asChild>
+                <Button data-testid="button-add-member">
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Üye Ekle
+                </Button>
+              </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Proje Üyesi Ekle</DialogTitle>
@@ -293,8 +462,108 @@ export function TeamTab({ project }: TeamTabProps) {
               </div>
             </DialogContent>
           </Dialog>
+          </div>
         )}
       </div>
+
+      {membersData?.isAdmin && invitations && invitations.filter(i => i.status === "pending").length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Mail className="h-4 w-4" />
+              Bekleyen Davetler
+            </CardTitle>
+            <CardDescription>
+              Henüz kabul edilmemiş davetler
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {invitations.filter(i => i.status === "pending").map((invitation) => {
+                const RoleIcon = roleLabels[invitation.role]?.icon || Eye;
+                const isExpired = new Date() > new Date(invitation.expiresAt);
+                return (
+                  <div
+                    key={invitation.id}
+                    className="flex flex-wrap items-center gap-3 p-3 rounded-md bg-muted/50"
+                    data-testid={`invitation-row-${invitation.id}`}
+                  >
+                    <Avatar>
+                      <AvatarFallback>
+                        {invitation.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{invitation.name}</p>
+                      <p className="text-sm text-muted-foreground truncate">{invitation.email}</p>
+                    </div>
+                    <Badge variant="outline">
+                      <RoleIcon className="h-3 w-3 mr-1" />
+                      {roleLabels[invitation.role]?.label || invitation.role}
+                    </Badge>
+                    {isExpired ? (
+                      <Badge variant="destructive">
+                        <Clock className="h-3 w-3 mr-1" />
+                        Süresi Dolmuş
+                      </Badge>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => copyInviteLink(invitation.token)}
+                          data-testid={`button-copy-invite-${invitation.id}`}
+                        >
+                          {copiedToken === invitation.token ? (
+                            <>
+                              <Check className="h-4 w-4 mr-1" />
+                              Kopyalandı
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-4 w-4 mr-1" />
+                              Linki Kopyala
+                            </>
+                          )}
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive"
+                              data-testid={`button-delete-invite-${invitation.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Daveti Sil</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                {invitation.name} için oluşturulan daveti silmek istediğinize emin misiniz?
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>İptal</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => deleteInvitationMutation.mutate(invitation.id)}
+                                className="bg-destructive text-destructive-foreground"
+                              >
+                                Sil
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
