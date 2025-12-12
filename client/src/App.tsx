@@ -14,6 +14,7 @@ import Landing from "@/pages/Landing";
 import Home from "@/pages/Home";
 import ProjectDetail from "@/pages/ProjectDetail";
 import ProjectComparison from "@/pages/ProjectComparison";
+import AcceptInvite from "@/pages/AcceptInvite";
 
 function Router() {
   return (
@@ -21,6 +22,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/comparison" component={ProjectComparison} />
       <Route path="/projects/:id" component={ProjectDetail} />
+      <Route path="/invite/:token" component={AcceptInvite} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -52,6 +54,15 @@ function AuthenticatedLayout() {
 
 function AppContent() {
   const { isAuthenticated, isLoading } = useAuth();
+  const pathname = window.location.pathname;
+
+  if (pathname.startsWith("/invite/")) {
+    return (
+      <Switch>
+        <Route path="/invite/:token" component={AcceptInvite} />
+      </Switch>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -67,6 +78,13 @@ function AppContent() {
 
   if (!isAuthenticated) {
     return <Landing />;
+  }
+
+  const pendingInviteToken = localStorage.getItem("pendingInviteToken");
+  if (pendingInviteToken) {
+    localStorage.removeItem("pendingInviteToken");
+    window.location.href = `/invite/${pendingInviteToken}`;
+    return null;
   }
 
   return <AuthenticatedLayout />;
