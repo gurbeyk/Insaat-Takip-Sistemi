@@ -9,7 +9,9 @@ import {
   insertMonthlyScheduleSchema,
   insertMonthlyWorkItemScheduleSchema,
   insertProjectMemberSchema,
+  insertProjectInvitationSchema,
 } from "@shared/schema";
+import crypto from "crypto";
 import { z } from "zod";
 
 export async function registerRoutes(
@@ -746,6 +748,155 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error removing project member:", error);
       res.status(500).json({ message: "Failed to remove project member" });
+    }
+  });
+
+  // Project Invitations
+  app.get("/api/projects/:id/invitations", isAuthenticated, async (req: any, res) => {
+    try {
+      const projectId = req.params.id;
+      const userId = req.user.claims.sub;
+      
+      if (!(await storage.canAccessProject(projectId, userId))) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      const invitations = await storage.getProjectInvitations(projectId);
+      res.json(invitations);
+    } catch (error) {
+      console.error("Error fetching invitations:", error);
+      res.status(500).json({ message: "Failed to fetch invitations" });
+    }
+  });
+
+  app.post("/api/projects/:id/invitations", isAuthenticated, async (req: any, res) => {
+    try {
+      const projectId = req.params.id;
+      const userId = req.user.claims.sub;
+      
+      if (!(await storage.isProjectAdmin(projectId, userId))) {
+        return res.status(403).json({ message: "Only project admins can create invitations" });
+      }
+      
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiry
+      
+      const parsed = insertProjectInvitationSchema.parse({
+        ...req.body,
+        projectId,
+        token,
+        expiresAt,
+        createdBy: userId,
+        status: "pending",
+      });
+      
+      const invitation = await storage.createProjectInvitation(parsed);
+      res.status(201).json(invitation);
+    } catch (error) {
+      console.error("Error creating invitation:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid invitation data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create invitation" });
+    }
+  });
+
+  app.delete("/api/projects/:id/invitations/:invitationId", isAuthenticated, async (req: any, res) => {
+    try {
+      const projectId = req.params.id;
+      const invitationId = req.params.invitationId;
+      const userId = req.user.claims.sub;
+      
+      if (!(await storage.isProjectAdmin(projectId, userId))) {
+        return res.status(403).json({ message: "Only project admins can delete invitations" });
+      }
+      
+      await storage.deleteProjectInvitation(invitationId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting invitation:", error);
+      res.status(500).json({ message: "Failed to delete invitation" });
+    }
+  });
+
+  // Public invitation acceptance endpoint (no auth required initially to get info)
+  app.get("/api/invitations/:token", async (req, res) => {
+    try {
+      const token = req.params.token;
+      const invitation = await storage.getInvitationByToken(token);
+      
+      if (!invitation) {
+        return res.status(404).json({ message: "Davet bulunamadı" });
+      }
+      
+      if (invitation.status !== "pending") {
+        return res.status(400).json({ message: "Bu davet zaten kullanılmış" });
+      }
+      
+      if (new Date() > new Date(invitation.expiresAt)) {
+        await storage.updateInvitationStatus(invitation.id, "expired");
+        return res.status(400).json({ message: "Davet süresi dolmuş" });
+      }
+      
+      const project = await storage.getProject(invitation.projectId);
+      res.json({
+        invitation,
+        projectName: project?.name,
+      });
+    } catch (error) {
+      console.error("Error fetching invitation:", error);
+      res.status(500).json({ message: "Failed to fetch invitation" });
+    }
+  });
+
+  // Accept invitation (requires auth)
+  app.post("/api/invitations/:token/accept", isAuthenticated, async (req: any, res) => {
+    try {
+      const token = req.params.token;
+      const userId = req.user.claims.sub;
+      
+      const invitation = await storage.getInvitationByToken(token);
+      
+      if (!invitation) {
+        return res.status(404).json({ message: "Davet bulunamadı" });
+      }
+      
+      if (invitation.status !== "pending") {
+        return res.status(400).json({ message: "Bu davet zaten kullanılmış" });
+      }
+      
+      if (new Date() > new Date(invitation.expiresAt)) {
+        await storage.updateInvitationStatus(invitation.id, "expired");
+        return res.status(400).json({ message: "Davet süresi dolmuş" });
+      }
+      
+      // Check if user is already a member
+      const existingMembers = await storage.getProjectMembers(invitation.projectId);
+      const alreadyMember = existingMembers.find(m => m.userId === userId);
+      
+      if (alreadyMember) {
+        await storage.updateInvitationStatus(invitation.id, "accepted");
+        return res.status(400).json({ message: "Bu projeye zaten üyesiniz" });
+      }
+      
+      // Add user as project member
+      await storage.addProjectMember({
+        projectId: invitation.projectId,
+        userId,
+        role: invitation.role,
+      });
+      
+      // Mark invitation as accepted
+      await storage.updateInvitationStatus(invitation.id, "accepted");
+      
+      res.json({ 
+        message: "Projeye başarıyla katıldınız",
+        projectId: invitation.projectId,
+      });
+    } catch (error) {
+      console.error("Error accepting invitation:", error);
+      res.status(500).json({ message: "Davet kabul edilemedi" });
     }
   });
 

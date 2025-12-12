@@ -6,6 +6,7 @@ import {
   monthlySchedule,
   monthlyWorkItemSchedule,
   projectMembers,
+  projectInvitations,
   type User,
   type UpsertUser,
   type Project,
@@ -20,6 +21,8 @@ import {
   type InsertMonthlyWorkItemSchedule,
   type ProjectMember,
   type InsertProjectMember,
+  type ProjectInvitation,
+  type InsertProjectInvitation,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, between, gte, lte } from "drizzle-orm";
@@ -63,6 +66,12 @@ export interface IStorage {
   addProjectMember(member: InsertProjectMember): Promise<ProjectMember>;
   updateProjectMemberRole(projectId: string, userId: string, role: string): Promise<ProjectMember | undefined>;
   removeProjectMember(projectId: string, userId: string): Promise<void>;
+  
+  getProjectInvitations(projectId: string): Promise<ProjectInvitation[]>;
+  getInvitationByToken(token: string): Promise<ProjectInvitation | undefined>;
+  createProjectInvitation(invitation: InsertProjectInvitation): Promise<ProjectInvitation>;
+  updateInvitationStatus(id: string, status: string): Promise<ProjectInvitation | undefined>;
+  deleteProjectInvitation(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -367,6 +376,43 @@ export class DatabaseStorage implements IStorage {
           eq(projectMembers.userId, userId)
         )
       );
+  }
+
+  async getProjectInvitations(projectId: string): Promise<ProjectInvitation[]> {
+    return await db
+      .select()
+      .from(projectInvitations)
+      .where(eq(projectInvitations.projectId, projectId))
+      .orderBy(desc(projectInvitations.createdAt));
+  }
+
+  async getInvitationByToken(token: string): Promise<ProjectInvitation | undefined> {
+    const [invitation] = await db
+      .select()
+      .from(projectInvitations)
+      .where(eq(projectInvitations.token, token));
+    return invitation;
+  }
+
+  async createProjectInvitation(invitation: InsertProjectInvitation): Promise<ProjectInvitation> {
+    const [newInvitation] = await db
+      .insert(projectInvitations)
+      .values(invitation)
+      .returning();
+    return newInvitation;
+  }
+
+  async updateInvitationStatus(id: string, status: string): Promise<ProjectInvitation | undefined> {
+    const [updated] = await db
+      .update(projectInvitations)
+      .set({ status })
+      .where(eq(projectInvitations.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteProjectInvitation(id: string): Promise<void> {
+    await db.delete(projectInvitations).where(eq(projectInvitations.id, id));
   }
 }
 
