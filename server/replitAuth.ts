@@ -33,10 +33,11 @@ export function getSession() {
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production", // Render'da HTTPS için true olmalı
+      secure: false, // Şimdilik güvenliği kapatalım, kartı kabul etsin
       maxAge: sessionTtl,
-      sameSite: "lax", // Redirect döngülerini önlemek için önemli
+      sameSite: "lax",
     },
+    proxy: true, // Bunu eklemeyi unutma!
   });
 }
 
