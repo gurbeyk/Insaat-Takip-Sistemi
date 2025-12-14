@@ -1,62 +1,41 @@
-import * as client from "openid-client";
-import { Strategy, type VerifyFunction } from "openid-client/passport";
-
+import { Strategy as LocalStrategy } from "passport-local";
 import passport from "passport";
 import session from "express-session";
 import type { Express, RequestHandler } from "express";
-import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
 
-const getOidcConfig = memoize(
-  async () => {
-    return await client.discovery(
-      new URL(process.env.ISSUER_URL ?? "https://replit.com/oidc"),
-      process.env.REPL_ID!
-    );
-  },
-  { maxAge: 3600 * 1000 }
-);
+// Sabit Admin Kullanıcısı (Şifre ve Kullanıcı Adı burada)
+const ADMIN_USER = {
+  id: 1, // Veritabanı ID'si
+  username: "admin",
+  password: "123456", // BURADAN ŞİFREYİ DEĞİŞTİREBİLİRSİN
+  email: "admin@example.com",
+  firstName: "Admin",
+  lastName: "User",
+  profileImageUrl: "",
+};
 
 export function getSession() {
-  const sessionTtl = 7 * 24 * 60 * 60 * 1000;
+  const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 7 Günlük oturum
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
     conString: process.env.DATABASE_URL,
-    createTableIfMissing: false,
+    createTableIfMissing: true, // Tablo yoksa oluştursun
     ttl: sessionTtl,
     tableName: "sessions",
   });
+
   return session({
-    secret: process.env.SESSION_SECRET!,
+    secret: process.env.SESSION_SECRET || "varsayilan-gizli-sifre",
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: true,
+      secure: process.env.NODE_ENV === "production", // Sadece Render'da güvenli mod
       maxAge: sessionTtl,
     },
-  });
-}
-
-function updateUserSession(
-  user: any,
-  tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers
-) {
-  user.claims = tokens.claims();
-  user.access_token = tokens.access_token;
-  user.refresh_token = tokens.refresh_token;
-  user.expires_at = user.claims?.exp;
-}
-
-async function upsertUser(claims: any) {
-  await storage.upsertUser({
-    id: claims["sub"],
-    email: claims["email"],
-    firstName: claims["first_name"],
-    lastName: claims["last_name"],
-    profileImageUrl: claims["profile_image_url"],
   });
 }
 
@@ -66,93 +45,82 @@ export async function setupAuth(app: Express) {
   app.use(passport.initialize());
   app.use(passport.session());
 
-  const config = await getOidcConfig();
+  // 1. Passport Local Stratejisi (Kullanıcı Adı/Şifre Kontrolü)
+  passport.use(
+    new LocalStrategy(async (username, password, done) => {
+      if (username === ADMIN_USER.username && password === ADMIN_USER.password) {
+        // Kullanıcıyı veritabanına kaydet/güncelle (Hata almamak için)
+        try {
+          await storage.upsertUser({
+            id: ADMIN_USER.id.toString(), // ID'yi string'e çeviriyoruz
+            email: ADMIN_USER.email,
+            firstName: ADMIN_USER.firstName,
+            lastName: ADMIN_USER.lastName,
+            profileImageUrl: ADMIN_USER.profileImageUrl,
+            username: ADMIN_USER.username,
+          } as any);
+        } catch (e) {
+          console.log("User create error (ignore if exists):", e);
+        }
+        return done(null, ADMIN_USER);
+      } else {
+        return done(null, false, { message: "Hatalı kullanıcı adı veya şifre" });
+      }
+    }),
+  );
 
-  const verify: VerifyFunction = async (
-    tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
-    verified: passport.AuthenticateCallback
-  ) => {
-    const user = {};
-    updateUserSession(user, tokens);
-    await upsertUser(tokens.claims());
-    verified(null, user);
-  };
+  passport.serializeUser((user, cb) => cb(null, user));
+  passport.deserializeUser((user: any, cb) => cb(null, user));
 
-  const registeredStrategies = new Set<string>();
+  // --- API ROUTES ---
 
-  const ensureStrategy = (domain: string) => {
-    const strategyName = `replitauth:${domain}`;
-    if (!registeredStrategies.has(strategyName)) {
-      const strategy = new Strategy(
-        {
-          name: strategyName,
-          config,
-          scope: "openid email profile offline_access",
-          callbackURL: `https://${domain}/api/callback`,
-        },
-        verify,
-      );
-      passport.use(strategy);
-      registeredStrategies.add(strategyName);
-    }
-  };
-
-  passport.serializeUser((user: Express.User, cb) => cb(null, user));
-  passport.deserializeUser((user: Express.User, cb) => cb(null, user));
-
-  app.get("/api/login", (req, res, next) => {
-    ensureStrategy(req.hostname);
-    passport.authenticate(`replitauth:${req.hostname}`, {
-      prompt: "login consent",
-      scope: ["openid", "email", "profile", "offline_access"],
-    })(req, res, next);
+  // Giriş Yapma (POST isteği ile)
+  app.post("/api/login", passport.authenticate("local"), (req, res) => {
+    res.status(200).json({ message: "Giriş başarılı", user: req.user });
   });
 
-  app.get("/api/callback", (req, res, next) => {
-    ensureStrategy(req.hostname);
-    passport.authenticate(`replitauth:${req.hostname}`, {
-      successReturnToOrRedirect: "/",
-      failureRedirect: "/api/login",
-    })(req, res, next);
-  });
-
-  app.get("/api/logout", (req, res) => {
-    req.logout(() => {
-      res.redirect(
-        client.buildEndSessionUrl(config, {
-          client_id: process.env.REPL_ID!,
-          post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
-        }).href
-      );
+  // Çıkış Yapma
+  app.post("/api/logout", (req, res, next) => {
+    req.logout((err) => {
+      if (err) return next(err);
+      res.redirect("/");
     });
+  });
+
+  // GET Logout (Linkten tıklayınca çıkmak için)
+  app.get("/api/logout", (req, res, next) => {
+    req.logout((err) => {
+      if (err) return next(err);
+      res.redirect("/");
+    });
+  });
+
+  // --- ACİL DURUM GİRİŞİ (Render'da hemen test etmen için) ---
+  // Tarayıcıya siteadresi.com/api/login-dev yazınca direkt admin olarak girer.
+  app.get("/api/login-dev", (req, res, next) => {
+     req.login(ADMIN_USER, async (err) => {
+       if (err) return next(err);
+       // Kullanıcıyı DB'ye yazalım ki hata vermesin
+       try {
+          await storage.upsertUser({
+            id: ADMIN_USER.id.toString(),
+            email: ADMIN_USER.email,
+            firstName: ADMIN_USER.firstName,
+            lastName: ADMIN_USER.lastName,
+            profileImageUrl: ADMIN_USER.profileImageUrl,
+            username: ADMIN_USER.username,
+          } as any);
+       } catch(e) { console.log(e); }
+
+       res.redirect("/");
+     });
   });
 }
 
-export const isAuthenticated: RequestHandler = async (req, res, next) => {
-  const user = req.user as any;
-
-  if (!req.isAuthenticated() || !user.expires_at) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
-
-  const now = Math.floor(Date.now() / 1000);
-  if (now <= user.expires_at) {
+// Kullanıcı Giriş Kontrolü (Middleware)
+export const isAuthenticated: RequestHandler = (req, res, next) => {
+  if (req.isAuthenticated()) {
     return next();
   }
-
-  const refreshToken = user.refresh_token;
-  if (!refreshToken) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
-
-  try {
-    const config = await getOidcConfig();
-    const tokenResponse = await client.refreshTokenGrant(config, refreshToken);
-    updateUserSession(user, tokenResponse);
-    return next();
-  } catch (error) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
+  res.status(401).json({ message: "Giriş yapılmadı (Unauthorized)" });
 };
