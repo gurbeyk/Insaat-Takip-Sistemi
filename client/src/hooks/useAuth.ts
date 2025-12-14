@@ -1,15 +1,63 @@
-import { useQuery } from "@tanstack/react-query";
-import type { User } from "@shared/schema";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/components/ui/use-toast";
+
+// Backend'den gelen Kullanıcı Tipi
+export type User = {
+  id: string;
+  username: string;
+  role: string;
+};
 
 export function useAuth() {
-  const { data: user, isLoading } = useQuery<User>({
-    queryKey: ["/api/auth/user"],
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // 1. SORGU: Backend'e "Ben kimim?" diye sorar (/api/user)
+  const { data: user, error, isLoading } = useQuery<User | null>({
+    queryKey: ["/api/user"],
+    queryFn: async () => {
+      const res = await fetch("/api/user");
+      // 401 (Unauthorized) gelirse kullanıcı yok demektir, null döner
+      if (res.status === 401) {
+        return null;
+      }
+      if (!res.ok) {
+        throw new Error("Kullanıcı bilgisi alınamadı");
+      }
+      return res.json();
+    },
+    // Oturum kapalıysa sürekli deneme yapmasın
     retry: false,
+    refetchOnWindowFocus: false,
+  });
+
+  // 2. LOGOUT İŞLEMİ
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      await fetch("/api/logout", { method: "POST" });
+    },
+    onSuccess: () => {
+      // Çıkış başarılı olunca kullanıcı verisini sıfırla
+      queryClient.setQueryData(["/api/user"], null);
+      toast({
+        title: "Çıkış Yapıldı",
+        description: "Başarıyla çıkış yaptınız.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Hata",
+        description: "Çıkış yapılırken bir sorun oluştu.",
+        variant: "destructive",
+      });
+    },
   });
 
   return {
     user,
-    isLoading,
+    // Eğer user verisi varsa isAuthenticated = true olur
     isAuthenticated: !!user,
+    isLoading,
+    logoutMutation,
   };
 }
