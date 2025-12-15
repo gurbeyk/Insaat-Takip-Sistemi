@@ -426,6 +426,124 @@ export default function ProjectDetail() {
         </Card>
       </div>
 
+      {/* Category-based Statistics */}
+      {(() => {
+        // Calculate category stats from workItems and dailyEntries
+        const categories = ['Temel', 'Ustyapi', 'Grobeton'];
+        const categoryStats: Record<string, { totalM3: number; spentMH: number; earnedMH: number; unitMH: number; efficiency: number }> = {};
+        
+        const workItemMap = new Map(project.workItems?.map(w => [w.id, w]) || []);
+        
+        for (const category of categories) {
+          const categoryM3WorkItems = project.workItems?.filter(w => w.category === category && w.unit === 'm3') || [];
+          const categoryM3WorkItemIds = new Set(categoryM3WorkItems.map(w => w.id));
+          const categoryAllWorkItems = project.workItems?.filter(w => w.category === category) || [];
+          const categoryAllWorkItemIds = new Set(categoryAllWorkItems.map(w => w.id));
+          
+          let totalM3 = 0;
+          let spentMH = 0;
+          let earnedMH = 0;
+          
+          for (const entry of project.dailyEntries || []) {
+            const workItem = workItemMap.get(entry.workItemId);
+            if (!workItem) continue;
+            
+            if (categoryM3WorkItemIds.has(entry.workItemId)) {
+              totalM3 += entry.quantity || 0;
+            }
+            
+            if (categoryAllWorkItemIds.has(entry.workItemId)) {
+              spentMH += entry.manHours || 0;
+              earnedMH += (entry.quantity || 0) * (workItem.targetManHours || 0);
+            }
+          }
+          
+          const unitMH = totalM3 > 0 ? spentMH / totalM3 : 0;
+          const efficiency = spentMH > 0 ? (earnedMH / spentMH) * 100 : 0;
+          
+          categoryStats[category] = { totalM3, spentMH, earnedMH, unitMH, efficiency };
+        }
+        
+        const categoryLabels: Record<string, string> = {
+          Temel: 'Temel',
+          Ustyapi: 'Üstyapı',
+          Grobeton: 'Grobeton',
+        };
+        
+        const hasData = categories.some(cat => categoryStats[cat].totalM3 > 0 || categoryStats[cat].spentMH > 0);
+        
+        if (!hasData) return null;
+        
+        return (
+          <div className="space-y-2">
+            <h3 className="text-sm font-medium text-muted-foreground">
+              Kategori Bazlı İstatistikler
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* m³ Quantities */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    İmalat Miktarı (m³)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {categories.map(cat => (
+                    <div key={cat} className="flex items-center justify-between">
+                      <span className="text-sm">{categoryLabels[cat]}</span>
+                      <span className="font-semibold" data-testid={`text-category-m3-${cat.toLowerCase()}`}>
+                        {categoryStats[cat].totalM3.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              {/* Unit MH (Spent MH / m³) */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Birim Adam-Saat (MH/m³)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {categories.map(cat => (
+                    <div key={cat} className="flex items-center justify-between">
+                      <span className="text-sm">{categoryLabels[cat]}</span>
+                      <span className="font-semibold" data-testid={`text-category-unit-mh-${cat.toLowerCase()}`}>
+                        {categoryStats[cat].unitMH.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              {/* Efficiency (Earned MH / Spent MH) */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Verimlilik (%)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {categories.map(cat => (
+                    <div key={cat} className="flex items-center justify-between">
+                      <span className="text-sm">{categoryLabels[cat]}</span>
+                      <span 
+                        className={`font-semibold ${categoryStats[cat].efficiency >= 100 ? 'text-green-600' : categoryStats[cat].efficiency >= 80 ? 'text-yellow-600' : 'text-orange-600'}`}
+                        data-testid={`text-category-efficiency-${cat.toLowerCase()}`}
+                      >
+                        {categoryStats[cat].efficiency.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}%
+                      </span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Current Month Stats Section */}
       <div className="space-y-2">
         <h3 className="text-sm font-medium text-muted-foreground">
