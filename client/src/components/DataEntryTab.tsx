@@ -332,6 +332,8 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
     const templateData = [
       {
         "Tarih": new Date().toISOString().split("T")[0],
+        "Bütçe Kodu Üst Öge": "TEMEL",
+        "İmalat Ayrımı": "Beton",
         "Bütçe Kodu": "BK-001",
         "İmalat Kalemi": "Örnek İmalat",
         "Birim": "m3",
@@ -351,6 +353,8 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
     const templateData = [
       {
         "Tarih": new Date().toISOString().split("T")[0],
+        "Bütçe Kodu Üst Öge": "TEMEL",
+        "İmalat Ayrımı": "Beton",
         "Bütçe Kodu": "BK-001",
         "İmalat Kalemi": "Örnek İmalat",
         "Birim": "Ad.sa",
@@ -378,6 +382,8 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
       const { region, ratio } = parseNotes(entry.notes);
       return {
         "Tarih": entry.entryDate,
+        "Bütçe Kodu Üst Öge": entry.workItem?.parentBudgetCode || "",
+        "İmalat Ayrımı": entry.workItem?.category || "",
         "Bütçe Kodu": entry.workItem?.budgetCode || "",
         "İmalat Kalemi": entry.workItem?.name || "",
         "Birim": entry.workItem?.unit || "",
@@ -405,6 +411,8 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
 
     const exportData = manHoursEntries.map((entry) => ({
       "Tarih": entry.entryDate,
+      "Bütçe Kodu Üst Öge": entry.workItem?.parentBudgetCode || "",
+      "İmalat Ayrımı": entry.workItem?.category || "",
       "Bütçe Kodu": entry.workItem?.budgetCode || "",
       "İmalat Kalemi": entry.workItem?.name || "",
       "Birim": "Ad.sa",
