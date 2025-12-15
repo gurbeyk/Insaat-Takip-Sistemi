@@ -64,11 +64,71 @@ export async function registerRoutes(
             elapsedDays = Math.max(0, elapsedDays);
           }
 
+          // Category-based statistics (Temel, Ustyapi, Grobeton)
+          const categories = ['Temel', 'Ustyapi', 'Grobeton'];
+          const categoryStats: Record<string, { 
+            totalM3: number; 
+            spentMH: number; 
+            earnedMH: number;
+            unitMH: number;
+            efficiency: number;
+          }> = {};
+
+          // Create maps for efficient lookups
+          const workItemMap = new Map(workItems.map(w => [w.id, w]));
+
+          for (const category of categories) {
+            // Get work items for this category with m3 unit only for quantity
+            const categoryM3WorkItems = workItems.filter(w => 
+              w.category === category && w.unit === 'm3'
+            );
+            const categoryM3WorkItemIds = new Set(categoryM3WorkItems.map(w => w.id));
+
+            // All work items in category for earned MH calculation
+            const categoryAllWorkItems = workItems.filter(w => w.category === category);
+            const categoryAllWorkItemIds = new Set(categoryAllWorkItems.map(w => w.id));
+
+            // Calculate totals
+            let totalM3 = 0;
+            let spentMH = 0;
+            let earnedMH = 0;
+
+            for (const entry of entries) {
+              const workItem = workItemMap.get(entry.workItemId);
+              if (!workItem) continue;
+
+              // m3 quantity only for m3 work items in category
+              if (categoryM3WorkItemIds.has(entry.workItemId)) {
+                totalM3 += entry.quantity || 0;
+              }
+
+              // Spent MH for all work items in category
+              if (categoryAllWorkItemIds.has(entry.workItemId)) {
+                spentMH += entry.manHours || 0;
+                // Earned MH = quantity × targetManHours (birim adam saat)
+                earnedMH += (entry.quantity || 0) * (workItem.targetManHours || 0);
+              }
+            }
+
+            // Calculate ratios
+            const unitMH = totalM3 > 0 ? spentMH / totalM3 : 0;
+            const efficiency = spentMH > 0 ? (earnedMH / spentMH) * 100 : 0;
+
+            categoryStats[category] = {
+              totalM3,
+              spentMH,
+              earnedMH,
+              unitMH,
+              efficiency,
+            };
+          }
+
           return {
             ...project,
             spentManHours,
             pouredConcrete,
             elapsedDays,
+            categoryStats,
           };
         })
       );

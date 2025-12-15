@@ -21,10 +21,19 @@ import {
 import { CreateProjectDialog } from "@/components/CreateProjectDialog";
 import type { Project } from "@shared/schema";
 
+interface CategoryStats {
+  totalM3: number;
+  spentMH: number;
+  earnedMH: number;
+  unitMH: number;
+  efficiency: number;
+}
+
 interface ProjectWithStats extends Project {
   spentManHours: number;
   pouredConcrete: number;
   elapsedDays: number;
+  categoryStats?: Record<string, CategoryStats>;
 }
 
 export default function Home() {
@@ -169,6 +178,107 @@ export default function Home() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Category-based Statistics */}
+          {projects.length > 0 && projects.some(p => p.categoryStats) && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+              {(() => {
+                // Aggregate category stats across all projects
+                const aggregatedStats: Record<string, CategoryStats> = {
+                  Temel: { totalM3: 0, spentMH: 0, earnedMH: 0, unitMH: 0, efficiency: 0 },
+                  Ustyapi: { totalM3: 0, spentMH: 0, earnedMH: 0, unitMH: 0, efficiency: 0 },
+                  Grobeton: { totalM3: 0, spentMH: 0, earnedMH: 0, unitMH: 0, efficiency: 0 },
+                };
+
+                projects.forEach(p => {
+                  if (p.categoryStats) {
+                    ['Temel', 'Ustyapi', 'Grobeton'].forEach(cat => {
+                      const stats = p.categoryStats?.[cat];
+                      if (stats) {
+                        aggregatedStats[cat].totalM3 += stats.totalM3;
+                        aggregatedStats[cat].spentMH += stats.spentMH;
+                        aggregatedStats[cat].earnedMH += stats.earnedMH;
+                      }
+                    });
+                  }
+                });
+
+                // Calculate derived values
+                ['Temel', 'Ustyapi', 'Grobeton'].forEach(cat => {
+                  const s = aggregatedStats[cat];
+                  s.unitMH = s.totalM3 > 0 ? s.spentMH / s.totalM3 : 0;
+                  s.efficiency = s.spentMH > 0 ? (s.earnedMH / s.spentMH) * 100 : 0;
+                });
+
+                const categoryLabels: Record<string, string> = {
+                  Temel: 'Temel',
+                  Ustyapi: 'Üstyapı',
+                  Grobeton: 'Grobeton',
+                };
+
+                return (
+                  <>
+                    {/* m³ Quantities */}
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">
+                          İmalat Miktarı (m³)
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        {['Temel', 'Ustyapi', 'Grobeton'].map(cat => (
+                          <div key={cat} className="flex items-center justify-between">
+                            <span className="text-sm">{categoryLabels[cat]}</span>
+                            <span className="font-semibold">
+                              {aggregatedStats[cat].totalM3.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+
+                    {/* Unit MH (Spent MH / m³) */}
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">
+                          Birim Adam-Saat (MH/m³)
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        {['Temel', 'Ustyapi', 'Grobeton'].map(cat => (
+                          <div key={cat} className="flex items-center justify-between">
+                            <span className="text-sm">{categoryLabels[cat]}</span>
+                            <span className="font-semibold">
+                              {aggregatedStats[cat].unitMH.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+
+                    {/* Efficiency (Earned MH / Spent MH) */}
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">
+                          Verimlilik (%)
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        {['Temel', 'Ustyapi', 'Grobeton'].map(cat => (
+                          <div key={cat} className="flex items-center justify-between">
+                            <span className="text-sm">{categoryLabels[cat]}</span>
+                            <span className={`font-semibold ${aggregatedStats[cat].efficiency >= 100 ? 'text-green-600' : aggregatedStats[cat].efficiency >= 80 ? 'text-yellow-600' : 'text-orange-600'}`}>
+                              {aggregatedStats[cat].efficiency.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}%
+                            </span>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  </>
+                );
+              })()}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {projects.map((project) => {
