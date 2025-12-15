@@ -33,7 +33,8 @@ export function getSession() {
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: false, // Şimdilik güvenliği kapatalım, kartı kabul etsin
+      // Burası çok önemli: Production ise (Render) true, Replit ise false olur.
+      secure: process.env.NODE_ENV === "production", 
       maxAge: sessionTtl,
       sameSite: "lax",
     },
