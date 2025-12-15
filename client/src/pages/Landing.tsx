@@ -1,9 +1,54 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { BarChart3, Users, FileSpreadsheet, TrendingUp, Building2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { BarChart3, Users, FileSpreadsheet, TrendingUp, Building2, Loader2 } from "lucide-react";
 
 export default function Landing() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("/api/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ username, password }),
+      });
+
+      if (response.ok) {
+        window.location.href = "/";
+      } else {
+        const data = await response.json();
+        toast({
+          title: "Giriş Başarısız",
+          description: data.message || "Kullanıcı adı veya şifre hatalı",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Hata",
+        description: "Bağlantı hatası oluştu",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -15,9 +60,60 @@ export default function Landing() {
             </div>
             <div className="flex items-center gap-2">
               <ThemeToggle />
-              <Button asChild data-testid="button-login">
-                <a href="/api/login-dev">Giriş Yap</a>
-              </Button>
+              <Dialog open={isOpen} onOpenChange={setIsOpen}>
+                <DialogTrigger asChild>
+                  <Button data-testid="button-login">Giriş Yap</Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Giriş Yap</DialogTitle>
+                    <DialogDescription>
+                      Hesabınıza giriş yapın
+                    </DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={handleLogin} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="username">Kullanıcı Adı</Label>
+                      <Input
+                        id="username"
+                        type="text"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder="Kullanıcı adınızı girin"
+                        required
+                        data-testid="input-username"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="password">Şifre</Label>
+                      <Input
+                        id="password"
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Şifrenizi girin"
+                        required
+                        data-testid="input-password"
+                      />
+                    </div>
+                    <Button 
+                      type="submit" 
+                      className="w-full" 
+                      disabled={isLoading}
+                      data-testid="button-submit-login"
+                    >
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Giriş yapılıyor...
+                        </>
+                      ) : (
+                        "Giriş Yap"
+                      )}
+                    </Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
         </div>
@@ -35,8 +131,8 @@ export default function Landing() {
                 Günlük adam-saat ve metraj verilerinizi kolayca girin, hedeflerinize göre performansınızı analiz edin, detaylı raporlarla projelerinizi kontrol altında tutun.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button size="lg" asChild data-testid="button-get-started">
-                  <a href="/api/login-dev">Hemen Başlayın</a>
+                <Button size="lg" onClick={() => setIsOpen(true)} data-testid="button-get-started">
+                  Hemen Başlayın
                 </Button>
                 <Button size="lg" variant="outline" data-testid="button-learn-more">
                   Daha Fazla Bilgi
