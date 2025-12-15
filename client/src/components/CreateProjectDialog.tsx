@@ -154,6 +154,8 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
   const downloadTemplate = () => {
     const templateData = [
       {
+        "Bütçe Kodu Üst Öge": "TEMEL",
+        "İmalat Ayrımı": "Beton",
         "Bütçe Kodu": "BK-001",
         "İmalat Kalemi": "Temel Betonu",
         "Birim": "m³",
@@ -161,6 +163,8 @@ export function CreateProjectDialog({ open, onOpenChange }: CreateProjectDialogP
         "Hedef Adam-Saat": 1000,
       },
       {
+        "Bütçe Kodu Üst Öge": "KOLON",
+        "İmalat Ayrımı": "Beton",
         "Bütçe Kodu": "BK-002",
         "İmalat Kalemi": "Kolon Betonu",
         "Birim": "m³",

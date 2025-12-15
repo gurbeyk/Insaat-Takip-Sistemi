@@ -80,8 +80,8 @@ export function validateWorkItems(
   jsonData.forEach((row, index) => {
     const rowNum = index + 2;
 
-    const parentBudgetCodeRaw = row["Butce kodu ust oge"] ?? row["parentBudgetCode"] ?? "";
-    const categoryRaw = row["Imalat Ayrimi"] ?? row["category"] ?? "";
+    const parentBudgetCodeRaw = row["Bütçe Kodu Üst Öge"] ?? row["Butce kodu ust oge"] ?? row["parentBudgetCode"] ?? "";
+    const categoryRaw = row["İmalat Ayrımı"] ?? row["Imalat Ayrimi"] ?? row["category"] ?? "";
     const budgetCodeRaw = row["Bütçe Kodu"] ?? row["budgetCode"] ?? "";
     const nameRaw = row["İmalat Kalemi"] ?? row["name"] ?? "";
     const unitRaw = row["Birim"] ?? row["unit"] ?? "";
