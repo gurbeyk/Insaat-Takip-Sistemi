@@ -52,7 +52,7 @@ export async function registerRoutes(
         projects.map(async (project) => {
           const entries = await storage.getDailyEntries(project.id);
           const workItems = await storage.getWorkItems(project.id);
-          const m3WorkItemIds = new Set(workItems.filter(w => w.unit === 'm3').map(w => w.id));
+          const m3WorkItemIds = new Set(workItems.filter(w => w.unit?.toLowerCase().includes('m3')).map(w => w.id));
           const spentManHours = entries.reduce((sum, e) => sum + (e.manHours || 0), 0);
           const pouredConcrete = entries.reduce((sum, e) => m3WorkItemIds.has(e.workItemId) ? sum + (e.quantity || 0) : sum, 0);
 
@@ -93,7 +93,7 @@ export async function registerRoutes(
       const workItems = await storage.getWorkItems(projectId);
       const dailyEntries = await storage.getDailyEntries(projectId);
 
-      const m3WorkItemIds = new Set(workItems.filter(w => w.unit === 'm3').map(w => w.id));
+      const m3WorkItemIds = new Set(workItems.filter(w => w.unit?.toLowerCase().includes('m3')).map(w => w.id));
       const spentManHours = dailyEntries.reduce((sum, e) => sum + (e.manHours || 0), 0);
       const pouredConcrete = dailyEntries.reduce((sum, e) => m3WorkItemIds.has(e.workItemId) ? sum + (e.quantity || 0) : sum, 0);
 
@@ -923,11 +923,11 @@ export async function registerRoutes(
       const schedule = await storage.getMonthlySchedule(projectId);
       const workSchedule = await storage.getMonthlyWorkItemSchedule(projectId);
 
-      // Get work items by unit type for material breakdown
-      const m3WorkItems = workItems.filter(w => w.unit === 'm3');
+      // Get work items by unit type for material breakdown (case-insensitive, includes variations like m3(destek))
+      const m3WorkItems = workItems.filter(w => w.unit?.toLowerCase().includes('m3'));
       const m3WorkItemIds = new Set(m3WorkItems.map(w => w.id));
-      const m2WorkItemIds = new Set(workItems.filter(w => w.unit === 'm2').map(w => w.id));
-      const tonWorkItemIds = new Set(workItems.filter(w => w.unit === 'ton').map(w => w.id));
+      const m2WorkItemIds = new Set(workItems.filter(w => w.unit?.toLowerCase().includes('m2')).map(w => w.id));
+      const tonWorkItemIds = new Set(workItems.filter(w => w.unit?.toLowerCase() === 'ton').map(w => w.id));
 
       // Create a map from normalized work item name to work item ID for schedule matching
       const workItemNameToIdMap = new Map<string, string>();
