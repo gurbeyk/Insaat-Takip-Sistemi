@@ -544,6 +544,138 @@ export default function ProjectDetail() {
         );
       })()}
 
+      {/* İmalat Bazlı İstatistikler */}
+      {(() => {
+        // Calculate stats based on parentBudgetCode (T, K, P, D, M, DES, IST)
+        const imalatCodes = ['T', 'K', 'P', 'D', 'M', 'DES', 'IST'];
+        const imalatLabels: Record<string, string> = {
+          T: 'T (Temel)',
+          K: 'K (Kolon)',
+          P: 'P (Perde)',
+          D: 'D (Döşeme)',
+          M: 'M (Merdiven)',
+          DES: 'DES (Destek)',
+          IST: 'IST (Isıtma)',
+        };
+        
+        const imalatStats: Record<string, { totalM3: number; spentMH: number; earnedMH: number; unitMH: number; efficiency: number }> = {};
+        const workItemMap = new Map(project.workItems?.map(w => [w.id, w]) || []);
+        
+        for (const code of imalatCodes) {
+          // Work items with m3 unit for quantity calculation
+          const codeM3WorkItems = project.workItems?.filter(w => 
+            w.parentBudgetCode === code && w.unit === 'm3'
+          ) || [];
+          const codeM3WorkItemIds = new Set(codeM3WorkItems.map(w => w.id));
+          
+          // All work items for this code for MH calculations
+          const codeAllWorkItems = project.workItems?.filter(w => w.parentBudgetCode === code) || [];
+          const codeAllWorkItemIds = new Set(codeAllWorkItems.map(w => w.id));
+          
+          let totalM3 = 0;
+          let spentMH = 0;
+          let earnedMH = 0;
+          
+          for (const entry of project.dailyEntries || []) {
+            const workItem = workItemMap.get(entry.workItemId);
+            if (!workItem) continue;
+            
+            // m3 quantity only for m3 work items
+            if (codeM3WorkItemIds.has(entry.workItemId)) {
+              totalM3 += entry.quantity || 0;
+            }
+            
+            // MH for all work items in this code
+            if (codeAllWorkItemIds.has(entry.workItemId)) {
+              spentMH += entry.manHours || 0;
+              // Earned MH = quantity × targetManHours (birim adam saat)
+              earnedMH += (entry.quantity || 0) * (workItem.targetManHours || 0);
+            }
+          }
+          
+          const unitMH = totalM3 > 0 ? spentMH / totalM3 : 0;
+          const efficiency = spentMH > 0 ? (earnedMH / spentMH) * 100 : 0;
+          
+          imalatStats[code] = { totalM3, spentMH, earnedMH, unitMH, efficiency };
+        }
+        
+        // Filter codes that have data
+        const activeCodes = imalatCodes.filter(code => 
+          imalatStats[code].totalM3 > 0 || imalatStats[code].spentMH > 0
+        );
+        
+        if (activeCodes.length === 0) return null;
+        
+        return (
+          <div className="space-y-2">
+            <h3 className="text-sm font-medium text-muted-foreground">
+              İmalat Bazlı İstatistikler
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* m³ Quantities */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    İmalat Miktarı (m³)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {activeCodes.map(code => (
+                    <div key={code} className="flex items-center justify-between">
+                      <span className="text-sm">{imalatLabels[code]}</span>
+                      <span className="font-semibold" data-testid={`text-imalat-m3-${code.toLowerCase()}`}>
+                        {imalatStats[code].totalM3.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              {/* Unit MH (Spent MH / m³) */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Birim Adam-Saat (MH/m³)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {activeCodes.map(code => (
+                    <div key={code} className="flex items-center justify-between">
+                      <span className="text-sm">{imalatLabels[code]}</span>
+                      <span className="font-semibold" data-testid={`text-imalat-unit-mh-${code.toLowerCase()}`}>
+                        {imalatStats[code].unitMH.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              {/* Efficiency (Earned MH / Spent MH) */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Verimlilik (%)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {activeCodes.map(code => (
+                    <div key={code} className="flex items-center justify-between">
+                      <span className="text-sm">{imalatLabels[code]}</span>
+                      <span 
+                        className={`font-semibold ${imalatStats[code].efficiency >= 100 ? 'text-green-600' : imalatStats[code].efficiency >= 80 ? 'text-yellow-600' : 'text-orange-600'}`}
+                        data-testid={`text-imalat-efficiency-${code.toLowerCase()}`}
+                      >
+                        {imalatStats[code].efficiency.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}%
+                      </span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Current Month Stats Section */}
       <div className="space-y-2">
         <h3 className="text-sm font-medium text-muted-foreground">
