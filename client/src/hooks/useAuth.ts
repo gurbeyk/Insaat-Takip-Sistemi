@@ -1,12 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/ui/use-toast";
+import type { User } from "@shared/schema";
 
-// Backend'den gelen Kullanıcı Tipi
-export type User = {
-  id: string;
-  username: string;
-  role: string;
-};
+export type { User };
 
 export function useAuth() {
   const { toast } = useToast();
@@ -43,6 +39,8 @@ export function useAuth() {
         title: "Çıkış Yapıldı",
         description: "Başarıyla çıkış yaptınız.",
       });
+      // Login sayfasına yönlendir
+      window.location.href = "/login";
     },
     onError: (error: Error) => {
       toast({

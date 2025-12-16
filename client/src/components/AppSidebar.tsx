@@ -21,7 +21,7 @@ import type { Project } from "@shared/schema";
 
 export function AppSidebar() {
   const [location] = useLocation();
-  const { user } = useAuth();
+  const { user, logoutMutation } = useAuth();
 
   const { data: projects, isLoading } = useQuery<Project[]>({
     queryKey: ["/api/projects"],
@@ -160,12 +160,11 @@ export function AppSidebar() {
           <Button
             variant="ghost"
             size="icon"
-            asChild
             data-testid="button-logout"
+            onClick={() => logoutMutation.mutate()}
+            disabled={logoutMutation.isPending}
           >
-            <a href="/api/logout">
-              <LogOut className="h-4 w-4" />
-            </a>
+            <LogOut className="h-4 w-4" />
           </Button>
         </div>
       </SidebarFooter>
