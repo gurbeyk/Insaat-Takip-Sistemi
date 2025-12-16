@@ -562,17 +562,23 @@ export default function ProjectDetail() {
         const workItemMap = new Map(project.workItems?.map(w => [w.id, w]) || []);
         
         for (const code of imalatCodes) {
-          // Work items with m3 unit for quantity calculation
-          const codeM3WorkItems = project.workItems?.filter(w => 
-            w.parentBudgetCode === code && w.unit === 'm3'
+          // Determine the unit to use for quantity calculation
+          // DES uses m3(destek), IST uses m3(isitma), others use m3
+          let quantityUnit = 'm3';
+          if (code === 'DES') quantityUnit = 'm3(destek)';
+          if (code === 'IST') quantityUnit = 'm3(isitma)';
+          
+          // Work items with specific unit for quantity calculation
+          const codeQuantityWorkItems = project.workItems?.filter(w => 
+            w.parentBudgetCode === code && w.unit === quantityUnit
           ) || [];
-          const codeM3WorkItemIds = new Set(codeM3WorkItems.map(w => w.id));
+          const codeQuantityWorkItemIds = new Set(codeQuantityWorkItems.map(w => w.id));
           
           // All work items for this code for MH calculations
           const codeAllWorkItems = project.workItems?.filter(w => w.parentBudgetCode === code) || [];
           const codeAllWorkItemIds = new Set(codeAllWorkItems.map(w => w.id));
           
-          let totalM3 = 0;
+          let totalQuantity = 0;
           let spentMH = 0;
           let earnedMH = 0;
           
@@ -580,9 +586,9 @@ export default function ProjectDetail() {
             const workItem = workItemMap.get(entry.workItemId);
             if (!workItem) continue;
             
-            // m3 quantity only for m3 work items
-            if (codeM3WorkItemIds.has(entry.workItemId)) {
-              totalM3 += entry.quantity || 0;
+            // Quantity for work items with the specific unit
+            if (codeQuantityWorkItemIds.has(entry.workItemId)) {
+              totalQuantity += entry.quantity || 0;
             }
             
             // MH for all work items in this code
@@ -593,10 +599,10 @@ export default function ProjectDetail() {
             }
           }
           
-          const unitMH = totalM3 > 0 ? spentMH / totalM3 : 0;
+          const unitMH = totalQuantity > 0 ? spentMH / totalQuantity : 0;
           const efficiency = spentMH > 0 ? (earnedMH / spentMH) * 100 : 0;
           
-          imalatStats[code] = { totalM3, spentMH, earnedMH, unitMH, efficiency };
+          imalatStats[code] = { totalM3: totalQuantity, spentMH, earnedMH, unitMH, efficiency };
         }
         
         // Filter codes that have data
