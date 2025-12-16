@@ -5,10 +5,12 @@ import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { CheckCircle, XCircle, Clock, UserPlus, Building2, Shield, Users, Eye, LogIn } from "lucide-react";
+import { CheckCircle, XCircle, Clock, UserPlus, Building2, Shield, Users, Eye, Lock } from "lucide-react";
 
 const roleLabels: Record<string, { label: string; icon: typeof Shield; description: string }> = {
   admin: {
@@ -34,11 +36,9 @@ export default function AcceptInvite() {
   const { toast } = useToast();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [accepted, setAccepted] = useState(false);
-
-  const handleLogin = () => {
-    localStorage.setItem("pendingInviteToken", token || "");
-    window.location.href = "/api/login";
-  };
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
 
   const { data: invitationData, isLoading, error } = useQuery({
     queryKey: ["/api/invitations", token],
@@ -64,6 +64,7 @@ export default function AcceptInvite() {
     retry: false
   });
 
+  // Zaten giriş yapmış kullanıcılar için davet kabul
   const acceptMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", `/api/invitations/${token}/accept`);
@@ -80,22 +81,62 @@ export default function AcceptInvite() {
       }, 2000);
     },
     onError: (error: Error) => {
-      if (error.message.includes("401") || error.message.includes("Unauthorized")) {
-        toast({
-          title: "Oturum gerekli",
-          description: "Daveti kabul etmek için lütfen giriş yapın.",
-          variant: "destructive"
-        });
-        handleLogin();
-      } else {
-        toast({
-          title: "Hata",
-          description: error.message || "Davet kabul edilirken bir hata oluştu",
-          variant: "destructive"
-        });
-      }
+      toast({
+        title: "Hata",
+        description: error.message || "Davet kabul edilirken bir hata oluştu",
+        variant: "destructive"
+      });
     }
   });
+
+  // Yeni kullanıcı kaydı için mutation
+  const registerMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/register-from-invitation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, password }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || "Kayıt sırasında bir hata oluştu");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setAccepted(true);
+      toast({
+        title: "Hesap oluşturuldu",
+        description: "Projeye başarıyla katıldınız."
+      });
+      setTimeout(() => {
+        navigate(`/projects/${data.projectId}`);
+      }, 2000);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Hata",
+        description: error.message || "Kayıt sırasında bir hata oluştu",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const handleRegister = () => {
+    setPasswordError("");
+    
+    if (password.length < 6) {
+      setPasswordError("Şifre en az 6 karakter olmalıdır");
+      return;
+    }
+    
+    if (password !== confirmPassword) {
+      setPasswordError("Şifreler eşleşmiyor");
+      return;
+    }
+
+    registerMutation.mutate();
+  };
 
   if (isLoading || authLoading) {
     return (
@@ -250,17 +291,63 @@ export default function AcceptInvite() {
               {acceptMutation.isPending ? "Kabul ediliyor..." : "Daveti Kabul Et"}
             </Button>
           ) : (
-            <div className="space-y-3">
-              <p className="text-sm text-center text-muted-foreground">
-                Daveti kabul etmek için giriş yapmanız gerekmektedir.
-              </p>
+            <div className="space-y-4">
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground mb-2">
+                  Hesabınızı oluşturmak için bir şifre belirleyin
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Kullanıcı adınız: <span className="font-medium">{invitationData?.invitation.email}</span>
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label htmlFor="password">Şifre</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="password"
+                      type="password"
+                      placeholder="En az 6 karakter"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="pl-10"
+                      data-testid="input-password"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">Şifre Tekrar</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      placeholder="Şifrenizi tekrar girin"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="pl-10"
+                      data-testid="input-confirm-password"
+                    />
+                  </div>
+                </div>
+
+                {passwordError && (
+                  <p className="text-sm text-destructive" data-testid="text-password-error">
+                    {passwordError}
+                  </p>
+                )}
+              </div>
+
               <Button
                 className="w-full"
-                onClick={handleLogin}
-                data-testid="button-login-to-accept"
+                onClick={handleRegister}
+                disabled={registerMutation.isPending || !password || !confirmPassword}
+                data-testid="button-create-account"
               >
-                <LogIn className="h-4 w-4 mr-2" />
-                Giriş Yap ve Kabul Et
+                {registerMutation.isPending ? "Hesap oluşturuluyor..." : "Hesap Oluştur ve Katıl"}
               </Button>
             </div>
           )}

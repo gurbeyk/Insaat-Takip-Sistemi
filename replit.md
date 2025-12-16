@@ -76,8 +76,15 @@ Preferred communication style: Simple, everyday language.
 - Connection via `DATABASE_URL` environment variable
 
 ### Authentication
-- **Replit Auth**: OpenID Connect provider for user authentication
+- **Local Authentication**: Passport.js with LocalStrategy for username/password login
+- **Password Hashing**: bcryptjs for secure password storage
+- **Session Management**: express-session with PostgreSQL store via `connect-pg-simple`
 - Session secret via `SESSION_SECRET` environment variable
+- **User Registration**: New users register via project invitation links
+  - When invitation link is clicked, user sees password creation form
+  - Email address is used as username
+  - Password is hashed with bcrypt before storing
+  - User is automatically logged in after registration
 
 ### File Storage
 - **Google Cloud Storage**: File upload capability (via `@google-cloud/storage`)
