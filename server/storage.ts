@@ -58,6 +58,8 @@ export interface IStorage {
   
   getMonthlySchedule(projectId: string): Promise<MonthlySchedule[]>;
   upsertMonthlySchedule(schedule: InsertMonthlySchedule): Promise<MonthlySchedule>;
+  deleteMonthlySchedule(projectId: string): Promise<void>;
+  bulkUpsertMonthlySchedule(schedules: InsertMonthlySchedule[]): Promise<MonthlySchedule[]>;
   
   getMonthlyWorkItemSchedule(projectId: string): Promise<MonthlyWorkItemSchedule[]>;
   createMonthlyWorkItemSchedules(schedules: InsertMonthlyWorkItemSchedule[]): Promise<MonthlyWorkItemSchedule[]>;
@@ -317,6 +319,21 @@ export class DatabaseStorage implements IStorage {
 
     const [newSchedule] = await db.insert(monthlySchedule).values(schedule).returning();
     return newSchedule;
+  }
+
+  async deleteMonthlySchedule(projectId: string): Promise<void> {
+    await db.delete(monthlySchedule).where(eq(monthlySchedule.projectId, projectId));
+  }
+
+  async bulkUpsertMonthlySchedule(schedules: InsertMonthlySchedule[]): Promise<MonthlySchedule[]> {
+    if (schedules.length === 0) return [];
+    
+    const results: MonthlySchedule[] = [];
+    for (const schedule of schedules) {
+      const result = await this.upsertMonthlySchedule(schedule);
+      results.push(result);
+    }
+    return results;
   }
 
   async getMonthlyWorkItemSchedule(projectId: string): Promise<MonthlyWorkItemSchedule[]> {

@@ -754,7 +754,7 @@ export function ReportsTab({ project }: ReportsTabProps) {
               <CardHeader>
                 <CardTitle className="text-lg">Aylık Adam Saat Performansı</CardTitle>
                 <CardDescription>
-                  Aylık: Gerçekleşen (mavi çubuk) ve Kazanılan (turuncu çubuk) | Kümülatif: Gerçekleşen (mavi çizgi) ve Kazanılan (turuncu çizgi)
+                  Aylık: Planlanan (yeşil), Gerçekleşen (mavi), Kazanılan (turuncu) | Kümülatif: Planlanan (yeşil çizgi), Gerçekleşen (mavi çizgi), Kazanılan (turuncu çizgi)
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -798,6 +798,13 @@ export function ReportsTab({ project }: ReportsTabProps) {
                       <Legend />
                       <Bar
                         yAxisId="left"
+                        dataKey="target"
+                        name="Aylık Planlanan"
+                        fill="#22c55e"
+                        radius={[4, 4, 0, 0]}
+                      />
+                      <Bar
+                        yAxisId="left"
                         dataKey="manHours"
                         name="Aylık Gerçekleşen"
                         fill="#3b82f6"
@@ -809,6 +816,16 @@ export function ReportsTab({ project }: ReportsTabProps) {
                         name="Aylık Kazanılan"
                         fill="#f97316"
                         radius={[4, 4, 0, 0]}
+                      />
+                      <Line
+                        yAxisId="right"
+                        type="monotone"
+                        dataKey="cumulativeTarget"
+                        name="Kümülatif Planlanan"
+                        stroke="#22c55e"
+                        strokeWidth={2}
+                        strokeDasharray="5 5"
+                        dot={{ fill: "#22c55e", strokeWidth: 2 }}
                       />
                       <Line
                         yAxisId="right"

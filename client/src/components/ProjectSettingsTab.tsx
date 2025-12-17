@@ -137,17 +137,26 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
 
   // Work schedule upload mutation
   const workScheduleMutation = useMutation({
-    mutationFn: async (items: { workItemName: string; year: number; month: number; plannedQuantity: number }[]) => {
-      return await apiRequest("POST", `/api/projects/${project.id}/work-schedule/bulk`, { items });
+    mutationFn: async (data: { 
+      items: { workItemName: string; year: number; month: number; plannedQuantity: number }[],
+      monthlyManHours?: { year: number; month: number; plannedManHours: number }[]
+    }) => {
+      return await apiRequest("POST", `/api/projects/${project.id}/work-schedule/bulk`, data);
     },
-    onSuccess: () => {
-      setUploadStatus({ success: true, message: "İş programı başarıyla yüklendi." });
+    onSuccess: (_data: any) => {
+      const manHoursCount = _data?.monthlyManHoursCount || 0;
+      let message = "İş programı başarıyla yüklendi.";
+      if (manHoursCount > 0) {
+        message += ` ${manHoursCount} aylık adam saat verisi kaydedildi.`;
+      }
+      setUploadStatus({ success: true, message });
       setWorkScheduleFile(null);
       toast({
         title: "İş Programı Yüklendi",
-        description: "İş programı başarıyla içe aktarıldı.",
+        description: message,
       });
       queryClient.invalidateQueries({ queryKey: [`/api/projects/${project.id}/work-schedule`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/projects/${project.id}/schedule`] });
     },
     onError: (error: Error) => {
       setUploadStatus({ success: false, message: error.message || "İş programı yüklenirken bir hata oluştu." });
@@ -200,6 +209,9 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
       const uniqueMonths = new Set(result.validItems.map(i => `${i.year}-${i.month}`));
       
       let summary = `${result.validItems.length} kayıt, ${uniqueWorkItems.size} imalat kalemi, ${uniqueMonths.size} ay bulundu.`;
+      if (result.monthlyManHours && result.monthlyManHours.length > 0) {
+        summary += ` ${result.monthlyManHours.length} aylık adam saat verisi.`;
+      }
       if (result.warnings.length > 0) {
         summary += ` (${result.warnings.length} uyarı)`;
         // Also set status to show warnings in the UI
@@ -211,7 +223,10 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
         title: "Yükleniyor",
         description: summary,
       });
-      workScheduleMutation.mutate(result.validItems);
+      workScheduleMutation.mutate({ 
+        items: result.validItems,
+        monthlyManHours: result.monthlyManHours 
+      });
     } catch (error) {
       setUploadStatus({ success: false, message: "Excel dosyası okunamadı." });
     }

@@ -364,6 +364,7 @@ export async function registerRoutes(
       }
 
       const items = req.body.items as any[];
+      const monthlyManHours = req.body.monthlyManHours as { year: number; month: number; plannedManHours: number }[] | undefined;
 
       // Guard: reject empty arrays to prevent accidentally wiping existing schedules
       if (!items || items.length === 0) {
@@ -381,7 +382,31 @@ export async function registerRoutes(
       );
 
       const schedule = await storage.createMonthlyWorkItemSchedules(parsedItems);
-      res.status(201).json(schedule);
+
+      // Also save monthly man-hours if provided
+      let savedMonthlySchedule: any[] = [];
+      if (monthlyManHours && monthlyManHours.length > 0) {
+        // Delete existing monthly schedule for this project
+        await storage.deleteMonthlySchedule(projectId);
+        
+        const monthlyScheduleItems = monthlyManHours.map((item) =>
+          insertMonthlyScheduleSchema.parse({
+            projectId,
+            year: item.year,
+            month: item.month,
+            plannedManHours: item.plannedManHours,
+            plannedConcrete: 0, // Not importing concrete from this column
+          })
+        );
+        
+        savedMonthlySchedule = await storage.bulkUpsertMonthlySchedule(monthlyScheduleItems);
+      }
+
+      res.status(201).json({ 
+        workSchedule: schedule, 
+        monthlySchedule: savedMonthlySchedule,
+        monthlyManHoursCount: savedMonthlySchedule.length 
+      });
     } catch (error) {
       console.error("Error bulk creating work schedule:", error);
       if (error instanceof z.ZodError) {
@@ -1085,7 +1110,8 @@ export async function registerRoutes(
         if (!monthlyData[monthKey]) {
           monthlyData[monthKey] = { manHours: 0, quantity: 0, target: s.plannedManHours || 0, earnedManHours: 0 };
         } else {
-          monthlyData[monthKey].target = s.plannedManHours || 0;
+          // Accumulate planned man-hours in case of multiple records for same month
+          monthlyData[monthKey].target += s.plannedManHours || 0;
         }
       });
 
@@ -1102,11 +1128,13 @@ export async function registerRoutes(
       // Build monthly array with cumulative values
       let monthlyCumulativeManHours = 0;
       let monthlyCumulativeEarnedManHours = 0;
+      let monthlyCumulativeTarget = 0;
       const monthly = Object.entries(monthlyData)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([month, data]) => {
           monthlyCumulativeManHours += data.manHours;
           monthlyCumulativeEarnedManHours += data.earnedManHours;
+          monthlyCumulativeTarget += data.target;
           return {
             month,
             manHours: data.manHours,
@@ -1115,6 +1143,7 @@ export async function registerRoutes(
             earnedManHours: data.earnedManHours,
             cumulativeManHours: monthlyCumulativeManHours,
             cumulativeEarnedManHours: monthlyCumulativeEarnedManHours,
+            cumulativeTarget: monthlyCumulativeTarget,
           };
         });
 

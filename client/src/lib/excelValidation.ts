@@ -514,6 +514,18 @@ export interface WorkScheduleRow {
   plannedQuantity: number;
 }
 
+// Monthly man-hours data from work schedule
+export interface MonthlyManHoursRow {
+  year: number;
+  month: number;
+  plannedManHours: number;
+}
+
+// Extended result for work schedule validation
+export interface WorkScheduleValidationResult extends ValidationResult<WorkScheduleRow> {
+  monthlyManHours: MonthlyManHoursRow[];
+}
+
 // Month names mapping (Turkish and English)
 // Note: "mar" maps to March (3), "may" maps to May (5) - shared between languages
 const monthNames: Record<string, number> = {
@@ -629,17 +641,18 @@ function parseMonthDate(dateValue: unknown): { year: number; month: number } | n
 
 export function validateWorkSchedule(
   jsonData: unknown[][]
-): ValidationResult<WorkScheduleRow> {
+): WorkScheduleValidationResult {
   const validItems: WorkScheduleRow[] = [];
+  const monthlyManHours: MonthlyManHoursRow[] = [];
   const errors: ValidationError[] = [];
   const warnings: string[] = [];
 
   if (!jsonData || jsonData.length < 2) {
     warnings.push("Excel dosyası boş veya yeterli veri içermiyor.");
-    return { validItems, errors, warnings };
+    return { validItems, errors, warnings, monthlyManHours };
   }
 
-  // First row is headers: ["Aylar", "Grobeton", "Temel", "Ustyapi", ...]
+  // First row is headers: ["Aylar", "Grobeton", "Temel", "Ustyapi", "Adam saat", ...]
   const headers = jsonData[0] as (string | number | null)[];
   
   if (!headers || headers.length < 2) {
@@ -649,15 +662,29 @@ export function validateWorkSchedule(
       value: headers,
       message: "İş programı en az 2 sütun içermeli (Aylar + İmalat Kalemi)",
     });
-    return { validItems, errors, warnings };
+    return { validItems, errors, warnings, monthlyManHours };
   }
 
-  // Extract work item names from headers (skip first column which is "Aylar")
+  // Find "Adam saat" column index (case-insensitive, Turkish locale)
+  let manHoursColumnIndex = -1;
+  const manHoursPatterns = ["adam saat", "adamsaat", "adam-saat", "man hours", "manhours"];
+  
+  // Extract work item names from headers (skip first column which is "Aylar" and "Adam saat" column)
   const workItemNames: string[] = [];
+  const workItemColumnIndices: number[] = [];
+  
   for (let i = 1; i < headers.length; i++) {
     const name = headers[i];
     if (name && String(name).trim()) {
-      workItemNames.push(String(name).trim());
+      const headerNormalized = String(name).trim().toLocaleLowerCase('tr-TR');
+      
+      // Check if this is the man-hours column
+      if (manHoursPatterns.some(p => headerNormalized.includes(p))) {
+        manHoursColumnIndex = i;
+      } else {
+        workItemNames.push(String(name).trim());
+        workItemColumnIndices.push(i);
+      }
     }
   }
 
@@ -668,7 +695,7 @@ export function validateWorkSchedule(
       value: headers,
       message: "En az bir imalat kalemi başlığı bulunamadı.",
     });
-    return { validItems, errors, warnings };
+    return { validItems, errors, warnings, monthlyManHours };
   }
 
   let skippedRows = 0;
@@ -705,10 +732,59 @@ export function validateWorkSchedule(
       continue;
     }
 
+    // Process man-hours column if present
+    if (manHoursColumnIndex >= 0) {
+      const manHoursValue = row[manHoursColumnIndex];
+      if (manHoursValue !== null && manHoursValue !== undefined && manHoursValue !== "") {
+        let plannedManHours: number = 0;
+        if (typeof manHoursValue === "number") {
+          plannedManHours = manHoursValue;
+        } else {
+          // Handle formatted numbers: 
+          // - Turkish format: "24.133" (dots as thousands) or "24,5" (comma as decimal)
+          // - International format: "24,133" (comma as thousands) or "24.5" (dot as decimal)
+          let cleanedValue = String(manHoursValue).replace(/\s/g, '');
+          
+          // If there's both comma and dot, determine which is the decimal separator
+          if (cleanedValue.includes(',') && cleanedValue.includes('.')) {
+            // Last separator is likely the decimal
+            const lastComma = cleanedValue.lastIndexOf(',');
+            const lastDot = cleanedValue.lastIndexOf('.');
+            if (lastComma > lastDot) {
+              // Comma is decimal separator (European: 24.133,50)
+              cleanedValue = cleanedValue.replace(/\./g, '').replace(',', '.');
+            } else {
+              // Dot is decimal separator (US: 24,133.50)
+              cleanedValue = cleanedValue.replace(/,/g, '');
+            }
+          } else if (cleanedValue.includes(',')) {
+            // Only comma - could be thousands or decimal
+            // If comma appears once and has 1-2 digits after, treat as decimal
+            const parts = cleanedValue.split(',');
+            if (parts.length === 2 && parts[1].length <= 2) {
+              cleanedValue = cleanedValue.replace(',', '.');
+            } else {
+              // Comma as thousands separator
+              cleanedValue = cleanedValue.replace(/,/g, '');
+            }
+          }
+          // Dots with no comma are treated as-is (standard decimal or thousands)
+          
+          const parsedNum = parseFloat(cleanedValue);
+          if (!isNaN(parsedNum)) {
+            plannedManHours = parsedNum;
+          }
+        }
+        if (plannedManHours > 0) {
+          monthlyManHours.push({ year, month, plannedManHours });
+        }
+      }
+    }
+
     // Process each work item column
     for (let colIndex = 0; colIndex < workItemNames.length; colIndex++) {
       const workItemName = workItemNames[colIndex];
-      const quantityValue = row[colIndex + 1]; // +1 because first column is date
+      const quantityValue = row[workItemColumnIndices[colIndex]]; // Use stored column index
 
       // Skip null/empty values
       if (quantityValue === null || quantityValue === undefined || quantityValue === "") {
@@ -766,5 +842,10 @@ export function validateWorkSchedule(
     }
   }
 
-  return { validItems, errors, warnings };
+  // Add info about man-hours column detection
+  if (manHoursColumnIndex >= 0 && monthlyManHours.length > 0) {
+    warnings.push(`Adam saat sütunu tespit edildi: ${monthlyManHours.length} aylık planlanan adam saat verisi bulundu.`);
+  }
+
+  return { validItems, errors, warnings, monthlyManHours };
 }

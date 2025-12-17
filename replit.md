@@ -98,6 +98,11 @@ Preferred communication style: Simple, everyday language.
 - Uses Turkish locale-safe normalization for character handling (İ/ı)
 - Validation with detailed error feedback showing skipped rows with examples
 - Frontend and backend guards prevent empty uploads from wiping existing data
+- **Adam Saat (Man-Hours) Column**: Now supports importing monthly planned man-hours
+  - Column header detected case-insensitively: "Adam saat", "Adam-saat", "AdamSaat", etc.
+  - Supports Turkish and international number formats (24.133 or 24,133)
+  - Stored in monthlySchedule table for each year/month
+  - Displayed in Monthly Man-Hours Performance Chart
 
 ### Monthly Concrete Performance Chart
 - Reports > Aylık tab includes "Aylık İmalat Performansı (Beton - m3)" section
