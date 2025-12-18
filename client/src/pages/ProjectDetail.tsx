@@ -499,11 +499,11 @@ export default function ProjectDetail() {
                 </CardContent>
               </Card>
 
-              {/* Unit MH (Spent MH / m³) */}
+              {/* Unit MH (Spent MH / Earned MH) */}
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Birim Adam-Saat (MH/m³)
+                    Adam-Saat (Harcanan / Kazanılan)
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
@@ -511,7 +511,7 @@ export default function ProjectDetail() {
                     <div key={cat} className="flex items-center justify-between">
                       <span className="text-sm">{categoryLabels[cat]}</span>
                       <span className="font-semibold" data-testid={`text-category-unit-mh-${cat.toLowerCase()}`}>
-                        {categoryStats[cat].unitMH.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}
+                        {categoryStats[cat].spentMH.toLocaleString("tr-TR", { maximumFractionDigits: 0 })} / {categoryStats[cat].earnedMH.toLocaleString("tr-TR", { maximumFractionDigits: 0 })}
                       </span>
                     </div>
                   ))}
@@ -637,11 +637,11 @@ export default function ProjectDetail() {
                 </CardContent>
               </Card>
 
-              {/* Unit MH (Spent MH / m³) */}
+              {/* Unit MH (Spent MH / Earned MH) */}
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Birim Adam-Saat (MH/m³)
+                    Adam-Saat (Harcanan / Kazanılan)
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
@@ -649,7 +649,7 @@ export default function ProjectDetail() {
                     <div key={code} className="flex items-center justify-between">
                       <span className="text-sm">{imalatLabels[code]}</span>
                       <span className="font-semibold" data-testid={`text-imalat-unit-mh-${code.toLowerCase()}`}>
-                        {imalatStats[code].unitMH.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}
+                        {imalatStats[code].spentMH.toLocaleString("tr-TR", { maximumFractionDigits: 0 })} / {imalatStats[code].earnedMH.toLocaleString("tr-TR", { maximumFractionDigits: 0 })}
                       </span>
                     </div>
                   ))}
