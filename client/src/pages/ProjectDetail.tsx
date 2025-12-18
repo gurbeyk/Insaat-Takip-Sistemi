@@ -499,22 +499,26 @@ export default function ProjectDetail() {
                 </CardContent>
               </Card>
 
-              {/* Unit MH (Spent MH / Earned MH) */}
+              {/* Unit MH (Spent MH/m³ / Earned MH/m³) */}
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Adam-Saat (Harcanan / Kazanılan)
+                    Birim Adam-Saat (Harcanan / Kazanılan MH/m³)
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  {categories.map(cat => (
-                    <div key={cat} className="flex items-center justify-between">
-                      <span className="text-sm">{categoryLabels[cat]}</span>
-                      <span className="font-semibold" data-testid={`text-category-unit-mh-${cat.toLowerCase()}`}>
-                        {categoryStats[cat].spentMH.toLocaleString("tr-TR", { maximumFractionDigits: 0 })} / {categoryStats[cat].earnedMH.toLocaleString("tr-TR", { maximumFractionDigits: 0 })}
-                      </span>
-                    </div>
-                  ))}
+                  {categories.map(cat => {
+                    const spentUnitMH = categoryStats[cat].totalM3 > 0 ? categoryStats[cat].spentMH / categoryStats[cat].totalM3 : 0;
+                    const earnedUnitMH = categoryStats[cat].totalM3 > 0 ? categoryStats[cat].earnedMH / categoryStats[cat].totalM3 : 0;
+                    return (
+                      <div key={cat} className="flex items-center justify-between">
+                        <span className="text-sm">{categoryLabels[cat]}</span>
+                        <span className="font-semibold" data-testid={`text-category-unit-mh-${cat.toLowerCase()}`}>
+                          {spentUnitMH.toLocaleString("tr-TR", { maximumFractionDigits: 2 })} / {earnedUnitMH.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </CardContent>
               </Card>
 
@@ -637,22 +641,26 @@ export default function ProjectDetail() {
                 </CardContent>
               </Card>
 
-              {/* Unit MH (Spent MH / Earned MH) */}
+              {/* Unit MH (Spent MH/m³ / Earned MH/m³) */}
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Adam-Saat (Harcanan / Kazanılan)
+                    Birim Adam-Saat (Harcanan / Kazanılan MH/m³)
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  {activeCodes.map(code => (
-                    <div key={code} className="flex items-center justify-between">
-                      <span className="text-sm">{imalatLabels[code]}</span>
-                      <span className="font-semibold" data-testid={`text-imalat-unit-mh-${code.toLowerCase()}`}>
-                        {imalatStats[code].spentMH.toLocaleString("tr-TR", { maximumFractionDigits: 0 })} / {imalatStats[code].earnedMH.toLocaleString("tr-TR", { maximumFractionDigits: 0 })}
-                      </span>
-                    </div>
-                  ))}
+                  {activeCodes.map(code => {
+                    const spentUnitMH = imalatStats[code].totalM3 > 0 ? imalatStats[code].spentMH / imalatStats[code].totalM3 : 0;
+                    const earnedUnitMH = imalatStats[code].totalM3 > 0 ? imalatStats[code].earnedMH / imalatStats[code].totalM3 : 0;
+                    return (
+                      <div key={code} className="flex items-center justify-between">
+                        <span className="text-sm">{imalatLabels[code]}</span>
+                        <span className="font-semibold" data-testid={`text-imalat-unit-mh-${code.toLowerCase()}`}>
+                          {spentUnitMH.toLocaleString("tr-TR", { maximumFractionDigits: 2 })} / {earnedUnitMH.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </CardContent>
               </Card>
 
