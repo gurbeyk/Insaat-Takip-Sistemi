@@ -359,7 +359,7 @@ export function ReportsTab({ project }: ReportsTabProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap items-end gap-4" onSubmit={(e) => e.preventDefault()}>
+          <div className="flex flex-wrap items-end gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="startDate">Başlangıç Tarihi</Label>
               <Input
@@ -367,7 +367,6 @@ export function ReportsTab({ project }: ReportsTabProps) {
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
                 className="w-40"
                 data-testid="input-start-date"
               />
@@ -379,24 +378,24 @@ export function ReportsTab({ project }: ReportsTabProps) {
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
                 className="w-40"
                 data-testid="input-end-date"
               />
             </div>
-            <Button onClick={handleApplyFilter} data-testid="button-apply-filter">
+            <Button type="button" onClick={handleApplyFilter} data-testid="button-apply-filter">
               <Calendar className="h-4 w-4 mr-2" />
               Filtrele
             </Button>
-            <Button variant="outline" onClick={handleClearFilter} data-testid="button-clear-filter">
+            <Button type="button" variant="outline" onClick={handleClearFilter} data-testid="button-clear-filter">
               Temizle
             </Button>
             <div className="flex-1" />
-            <Button variant="outline" onClick={exportToExcel} data-testid="button-export-excel">
+            <Button type="button" variant="outline" onClick={exportToExcel} data-testid="button-export-excel">
               <FileSpreadsheet className="h-4 w-4 mr-2" />
               Excel
             </Button>
             <Button 
+              type="button"
               variant="outline" 
               onClick={exportToPDF} 
               disabled={isExporting}
