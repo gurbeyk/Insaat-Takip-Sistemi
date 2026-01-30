@@ -162,12 +162,16 @@ export function ReportsTab({ project }: ReportsTabProps) {
     const workbook = XLSX.utils.book_new();
 
     const dailySheet = XLSX.utils.json_to_sheet(
-      reportData.daily.map((d) => ({
-        "Tarih": d.date,
-        "Adam-Saat": d.manHours,
-        "Miktar": d.quantity,
-        "Hedef": Math.round(d.target),
-      }))
+      reportData.daily.map((d) => {
+        const [year, month, day] = d.date.split("-");
+        const formattedDate = `${day}.${month}.${year}`;
+        return {
+          "Tarih": formattedDate,
+          "Adam-Saat": d.manHours,
+          "Miktar": d.quantity,
+          "Hedef": Math.round(d.target),
+        };
+      })
     );
     XLSX.utils.book_append_sheet(workbook, dailySheet, "Günlük");
 
@@ -192,12 +196,16 @@ export function ReportsTab({ project }: ReportsTabProps) {
     XLSX.utils.book_append_sheet(workbook, monthlySheet, "Aylık");
 
     const cumulativeSheet = XLSX.utils.json_to_sheet(
-      reportData.cumulative.map((c) => ({
-        "Tarih": c.date,
-        "Toplam Adam-Saat": c.cumulativeManHours,
-        "Toplam Miktar": c.cumulativeQuantity,
-        "Kümülatif Hedef": Math.round(c.cumulativeTarget),
-      }))
+      reportData.cumulative.map((c) => {
+        const [year, month, day] = c.date.split("-");
+        const formattedDate = `${day}.${month}.${year}`;
+        return {
+          "Tarih": formattedDate,
+          "Toplam Adam-Saat": c.cumulativeManHours,
+          "Toplam Miktar": c.cumulativeQuantity,
+          "Kümülatif Hedef": Math.round(c.cumulativeTarget),
+        };
+      })
     );
     XLSX.utils.book_append_sheet(workbook, cumulativeSheet, "Kümülatif");
 
@@ -351,7 +359,7 @@ export function ReportsTab({ project }: ReportsTabProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap items-end gap-4">
+          <div className="flex flex-wrap items-end gap-4" onSubmit={(e) => e.preventDefault()}>
             <div className="flex flex-col gap-2">
               <Label htmlFor="startDate">Başlangıç Tarihi</Label>
               <Input
@@ -359,6 +367,7 @@ export function ReportsTab({ project }: ReportsTabProps) {
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
+                onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
                 className="w-40"
                 data-testid="input-start-date"
               />
@@ -370,6 +379,7 @@ export function ReportsTab({ project }: ReportsTabProps) {
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
+                onClick={(e) => (e.target as HTMLInputElement).showPicker?.()}
                 className="w-40"
                 data-testid="input-end-date"
               />

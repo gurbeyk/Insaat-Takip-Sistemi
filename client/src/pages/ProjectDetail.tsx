@@ -187,15 +187,35 @@ export default function ProjectDetail() {
     let monthlyPouredConcrete = 0;
     let monthlyEarnedMH = 0;
     
+    // For specialized progress calculations
+    let monthlyTemelMH = 0;
+    let monthlyTemelConcrete = 0;
+    let monthlyUstyapiMH = 0;
+    let monthlyUstyapiConcrete = 0;
+    
     project.dailyEntries?.forEach((entry) => {
       const entryDate = new Date(entry.entryDate);
       if (entryDate.getFullYear() === currentYear && entryDate.getMonth() === currentMonth) {
         monthlySpentMH += entry.manHours || 0;
         
+        const workItem = project.workItems?.find(wi => wi.id === entry.workItemId);
+        
         // Poured concrete - check if unit is m3
         const unit = workItemUnits.get(entry.workItemId) || "";
         if (unit === "m3") {
           monthlyPouredConcrete += entry.quantity || 0;
+          
+          if (workItem?.category === 'Temel') {
+            monthlyTemelConcrete += entry.quantity || 0;
+          } else if (workItem?.category === 'Ustyapi') {
+            monthlyUstyapiConcrete += entry.quantity || 0;
+          }
+        }
+        
+        if (workItem?.category === 'Temel') {
+          monthlyTemelMH += entry.manHours || 0;
+        } else if (workItem?.category === 'Ustyapi') {
+          monthlyUstyapiMH += entry.manHours || 0;
         }
         
         // Earned man-hours: quantity × unit man-hours
@@ -206,6 +226,8 @@ export default function ProjectDetail() {
     
     // İlerleme MH = harcanan / dökülen beton
     const progressMH = monthlyPouredConcrete > 0 ? monthlySpentMH / monthlyPouredConcrete : 0;
+    const temelProgressMH = monthlyTemelConcrete > 0 ? monthlyTemelMH / monthlyTemelConcrete : 0;
+    const ustyapiProgressMH = monthlyUstyapiConcrete > 0 ? monthlyUstyapiMH / monthlyUstyapiConcrete : 0;
     
     // Verimlilik % = kazanılan / gerçekleşen × 100
     const efficiency = monthlySpentMH > 0 ? (monthlyEarnedMH / monthlySpentMH) * 100 : 0;
@@ -221,6 +243,8 @@ export default function ProjectDetail() {
       spentMH: monthlySpentMH,
       pouredConcrete: monthlyPouredConcrete,
       progressMH,
+      temelProgressMH,
+      ustyapiProgressMH,
       earnedMH: monthlyEarnedMH,
       efficiency,
     };
@@ -740,7 +764,17 @@ export default function ProjectDetail() {
                       ? currentMonthStats.progressMH.toLocaleString("tr-TR", { maximumFractionDigits: 2 })
                       : "-"}
                   </p>
-                  <p className="text-sm text-muted-foreground">Aylık İlerleme MH</p>
+                  <p className="text-sm text-muted-foreground">Aylık İlerleme MH (MH/m³)</p>
+                  <div className="mt-1 space-y-0.5 border-t pt-1">
+                    <div className="text-[10px] text-muted-foreground flex justify-between items-center">
+                      <span>Temel:</span>
+                      <span className="font-medium text-foreground">{currentMonthStats.temelProgressMH > 0 ? currentMonthStats.temelProgressMH.toLocaleString("tr-TR", { maximumFractionDigits: 2 }) : "-"}</span>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground flex justify-between items-center">
+                      <span>Üstyapı:</span>
+                      <span className="font-medium text-foreground">{currentMonthStats.ustyapiProgressMH > 0 ? currentMonthStats.ustyapiProgressMH.toLocaleString("tr-TR", { maximumFractionDigits: 2 }) : "-"}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </CardContent>
