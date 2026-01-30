@@ -768,11 +768,11 @@ export default function ProjectDetail() {
                   <div className="mt-1 space-y-0.5 border-t pt-1">
                     <div className="text-[10px] text-muted-foreground flex justify-between items-center">
                       <span>Temel:</span>
-                      <span className="font-medium text-foreground">{currentMonthStats.temelProgressMH > 0 ? currentMonthStats.temelProgressMH.toLocaleString("tr-TR", { maximumFractionDigits: 2 }) : "-"}</span>
+                      <span className="font-medium text-foreground">{(currentMonthStats.temelProgressMH ?? 0) > 0 ? (currentMonthStats.temelProgressMH ?? 0).toLocaleString("tr-TR", { maximumFractionDigits: 2 }) : "-"}</span>
                     </div>
                     <div className="text-[10px] text-muted-foreground flex justify-between items-center">
                       <span>Üstyapı:</span>
-                      <span className="font-medium text-foreground">{currentMonthStats.ustyapiProgressMH > 0 ? currentMonthStats.ustyapiProgressMH.toLocaleString("tr-TR", { maximumFractionDigits: 2 }) : "-"}</span>
+                      <span className="font-medium text-foreground">{(currentMonthStats.ustyapiProgressMH ?? 0) > 0 ? (currentMonthStats.ustyapiProgressMH ?? 0).toLocaleString("tr-TR", { maximumFractionDigits: 2 }) : "-"}</span>
                     </div>
                   </div>
                 </div>
