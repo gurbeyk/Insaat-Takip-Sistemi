@@ -4,10 +4,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { format, parseISO } from "date-fns";
+import { tr } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 import {
   Table,
   TableBody,
@@ -361,29 +365,60 @@ export function ReportsTab({ project }: ReportsTabProps) {
         <CardContent>
           <div className="flex flex-wrap items-end gap-4">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="startDate">Başlangıç Tarihi</Label>
-              <Input
-                id="startDate"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-40"
-                data-testid="input-start-date"
-              />
+              <Label>Başlangıç Tarihi</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn(
+                      "w-40 justify-start text-left font-normal",
+                      !startDate && "text-muted-foreground"
+                    )}
+                    data-testid="button-start-date-picker"
+                  >
+                    <Calendar className="mr-2 h-4 w-4" />
+                    {startDate ? format(parseISO(startDate), "dd.MM.yyyy") : <span>Seçiniz</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <CalendarComponent
+                    mode="single"
+                    selected={startDate ? parseISO(startDate) : undefined}
+                    onSelect={(date) => setStartDate(date ? format(date, "yyyy-MM-dd") : "")}
+                    initialFocus
+                    locale={tr}
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="endDate">Bitiş Tarihi</Label>
-              <Input
-                id="endDate"
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-40"
-                data-testid="input-end-date"
-              />
+              <Label>Bitiş Tarihi</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn(
+                      "w-40 justify-start text-left font-normal",
+                      !endDate && "text-muted-foreground"
+                    )}
+                    data-testid="button-end-date-picker"
+                  >
+                    <Calendar className="mr-2 h-4 w-4" />
+                    {endDate ? format(parseISO(endDate), "dd.MM.yyyy") : <span>Seçiniz</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <CalendarComponent
+                    mode="single"
+                    selected={endDate ? parseISO(endDate) : undefined}
+                    onSelect={(date) => setEndDate(date ? format(date, "yyyy-MM-dd") : "")}
+                    initialFocus
+                    locale={tr}
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
             <Button type="button" onClick={handleApplyFilter} data-testid="button-apply-filter">
-              <Calendar className="h-4 w-4 mr-2" />
               Filtrele
             </Button>
             <Button type="button" variant="outline" onClick={handleClearFilter} data-testid="button-clear-filter">
