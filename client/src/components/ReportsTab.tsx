@@ -169,33 +169,46 @@ export function ReportsTab({ project }: ReportsTabProps) {
       reportData.daily.map((d) => {
         const [year, month, day] = d.date.split("-");
         const formattedDate = `${day}.${month}.${year}`;
+        const efficiency = d.manHours > 0 ? (d.earnedManHours / d.manHours) * 100 : 0;
         return {
           "Tarih": formattedDate,
           "Adam-Saat": d.manHours,
+          "Kazanılan Adam-Saat": Math.round(d.earnedManHours),
           "Miktar": d.quantity,
           "Hedef": Math.round(d.target),
+          "Verimlilik (%)": d.manHours > 0 ? Math.round(efficiency) : "-",
         };
       })
     );
     XLSX.utils.book_append_sheet(workbook, dailySheet, "Günlük");
 
     const weeklySheet = XLSX.utils.json_to_sheet(
-      reportData.weekly.map((w) => ({
-        "Hafta": w.week,
-        "Adam-Saat": w.manHours,
-        "Miktar": w.quantity,
-        "Hedef": Math.round(w.target),
-      }))
+      reportData.weekly.map((w) => {
+        const efficiency = w.manHours > 0 ? (w.earnedManHours / w.manHours) * 100 : 0;
+        return {
+          "Hafta": w.week,
+          "Adam-Saat": w.manHours,
+          "Kazanılan Adam-Saat": Math.round(w.earnedManHours),
+          "Miktar": w.quantity,
+          "Hedef": Math.round(w.target),
+          "Verimlilik (%)": w.manHours > 0 ? Math.round(efficiency) : "-",
+        };
+      })
     );
     XLSX.utils.book_append_sheet(workbook, weeklySheet, "Haftalık");
 
     const monthlySheet = XLSX.utils.json_to_sheet(
-      reportData.monthly.map((m) => ({
-        "Ay": formatTurkishMonth(m.month),
-        "Adam-Saat": m.manHours,
-        "Miktar": m.quantity,
-        "Hedef": Math.round(m.target),
-      }))
+      reportData.monthly.map((m) => {
+        const efficiency = m.manHours > 0 ? (m.earnedManHours / m.manHours) * 100 : 0;
+        return {
+          "Ay": formatTurkishMonth(m.month),
+          "Adam-Saat": m.manHours,
+          "Kazanılan Adam-Saat": Math.round(m.earnedManHours),
+          "Miktar": m.quantity,
+          "Hedef": Math.round(m.target),
+          "Verimlilik (%)": m.manHours > 0 ? Math.round(efficiency) : "-",
+        };
+      })
     );
     XLSX.utils.book_append_sheet(workbook, monthlySheet, "Aylık");
 
