@@ -230,23 +230,21 @@ export function ReportsTab({ project }: ReportsTabProps) {
       const workItemsSheet = XLSX.utils.json_to_sheet(
         reportData.workItems.map((wi) => {
           const progressUnitMH = wi.actualQuantity > 0 ? wi.actualManHours / wi.actualQuantity : 0;
-          const targetUnitMH = wi.targetManHours; // Already per-unit from template
+          const targetUnitMH = wi.targetManHours;
           const efficiency = progressUnitMH > 0 && targetUnitMH > 0 ? (targetUnitMH / progressUnitMH) * 100 : 0;
           return {
             "Bütçe Kodu": wi.budgetCode,
             "İmalat Kalemi": wi.name,
             "Birim": wi.unit,
-            "Hedef Miktar": wi.targetQuantity,
-            "Gerçekleşen Miktar": wi.actualQuantity,
-            "Hedef Birim A-S": targetUnitMH > 0 ? Number(targetUnitMH.toFixed(2)) : "-",
-            "Gerçekleşen Adam-Saat": wi.actualManHours,
-            "İlerleme Birim A-S": progressUnitMH > 0 ? Number(progressUnitMH.toFixed(2)) : "-",
+            "Hedef Miktar": Number(wi.targetQuantity.toFixed(2)),
+            "Gerçekleşen Miktar": Number(wi.actualQuantity.toFixed(2)),
+            "Birim A-S (Hedef / Gerçekleşen)": `${targetUnitMH.toFixed(2)} / ${progressUnitMH > 0 ? progressUnitMH.toFixed(2) : "-"}`,
             "İlerleme (%)": Math.round(wi.progressPercent),
             "Verimlilik (%)": progressUnitMH > 0 && targetUnitMH > 0 ? Math.round(efficiency) : "-",
           };
         })
       );
-      XLSX.utils.book_append_sheet(workbook, workItemsSheet, "İmalat Kalemleri");
+      XLSX.utils.book_append_sheet(workbook, workItemsSheet, "İmalat Performans");
     }
 
     const summarySheet = XLSX.utils.json_to_sheet([
