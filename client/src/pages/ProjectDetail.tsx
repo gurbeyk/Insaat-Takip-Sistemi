@@ -714,6 +714,124 @@ export default function ProjectDetail() {
         );
       })()}
 
+      {/* Kaynak Bazlı İstatistikler */}
+      {(() => {
+        const resourceTypes = [
+          { unit: 'm3', label: 'Beton işleri', unitLabel: 'MH/m³' },
+          { unit: 'm2', label: 'Kalıp işleri', unitLabel: 'MH/m²' },
+          { unit: 'ton', label: 'Demir işleri', unitLabel: 'MH/ton' },
+          { unit: 'm3(destek)', label: 'Destek aktiviteleri', unitLabel: 'MH/m³' },
+          { unit: 'm3(ısıtma)', label: 'Beton ısıtma işleri', unitLabel: 'MH/m³' },
+        ];
+
+        const workItemMap = new Map(project.workItems?.map(w => [w.id, w]) || []);
+
+        const resourceStats: Record<string, { totalQty: number; spentMH: number; earnedMH: number; unitLabel: string; label: string }> = {};
+
+        for (const rt of resourceTypes) {
+          const matchingWorkItems = project.workItems?.filter(w => w.unit === rt.unit) || [];
+          const matchingIds = new Set(matchingWorkItems.map(w => w.id));
+
+          let totalQty = 0;
+          let spentMH = 0;
+          let earnedMH = 0;
+
+          for (const entry of project.dailyEntries || []) {
+            const workItem = workItemMap.get(entry.workItemId);
+            if (!workItem || !matchingIds.has(entry.workItemId)) continue;
+            totalQty += entry.quantity || 0;
+            spentMH += entry.manHours || 0;
+            earnedMH += (entry.quantity || 0) * (workItem.targetManHours || 0);
+          }
+
+          resourceStats[rt.unit] = { totalQty, spentMH, earnedMH, unitLabel: rt.unitLabel, label: rt.label };
+        }
+
+        const activeTypes = resourceTypes.filter(rt =>
+          resourceStats[rt.unit].totalQty > 0 || resourceStats[rt.unit].spentMH > 0
+        );
+
+        if (activeTypes.length === 0) return null;
+
+        return (
+          <div className="space-y-2">
+            <h3 className="text-sm font-medium text-muted-foreground">
+              Kaynak Bazlı İstatistikler
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* İmalat Miktarları */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    İmalat Miktarları
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {activeTypes.map(rt => (
+                    <div key={rt.unit} className="flex items-center justify-between">
+                      <span className="text-sm">{rt.label}</span>
+                      <span className="font-semibold" data-testid={`text-resource-qty-${rt.unit.replace(/[^a-z0-9]/gi, '-')}`}>
+                        {resourceStats[rt.unit].totalQty.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              {/* Birim Adam-Saat (Harcanan / Kazanılan) */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Birim Adam-Saat (Harcanan / Kazanılan)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {activeTypes.map(rt => {
+                    const s = resourceStats[rt.unit];
+                    const spentUnit = s.totalQty > 0 ? s.spentMH / s.totalQty : 0;
+                    const earnedUnit = s.totalQty > 0 ? s.earnedMH / s.totalQty : 0;
+                    return (
+                      <div key={rt.unit} className="flex items-center justify-between">
+                        <span className="text-sm">{rt.label}</span>
+                        <span className="font-semibold text-xs" data-testid={`text-resource-unit-mh-${rt.unit.replace(/[^a-z0-9]/gi, '-')}`}>
+                          {spentUnit.toLocaleString("tr-TR", { maximumFractionDigits: 2 })} / {earnedUnit.toLocaleString("tr-TR", { maximumFractionDigits: 2 })} <span className="text-muted-foreground">{s.unitLabel}</span>
+                        </span>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+
+              {/* Verimlilik */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Verimlilik (%)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {activeTypes.map(rt => {
+                    const s = resourceStats[rt.unit];
+                    const efficiency = s.spentMH > 0 ? (s.earnedMH / s.spentMH) * 100 : 0;
+                    return (
+                      <div key={rt.unit} className="flex items-center justify-between">
+                        <span className="text-sm">{rt.label}</span>
+                        <span
+                          className={`font-semibold ${efficiency >= 100 ? 'text-green-600' : efficiency >= 80 ? 'text-yellow-600' : 'text-orange-600'}`}
+                          data-testid={`text-resource-efficiency-${rt.unit.replace(/[^a-z0-9]/gi, '-')}`}
+                        >
+                          {efficiency.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}%
+                        </span>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Current Month Stats Section */}
       <div className="space-y-2">
         <h3 className="text-sm font-medium text-muted-foreground">
