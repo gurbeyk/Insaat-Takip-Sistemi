@@ -498,6 +498,7 @@ export async function registerRoutes(
             quantity: entry.quantity,
             manHours: 0,
             notes: noteParts.join(', '),
+            imalatKotu: entry.imalatKotu || null,
             projectId,
             enteredBy: userId,
           });

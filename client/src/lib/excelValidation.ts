@@ -41,6 +41,7 @@ export interface WorkProgressRow {
   quantity: number;
   ratio?: string;
   region?: string;
+  imalatKotu?: string;
 }
 
 export interface ManHoursRow {
@@ -184,6 +185,7 @@ export function validateWorkProgress(
     const quantityRaw = row["Miktar"] ?? row["quantity"];
     const ratioRaw = row["Oranlar"] ?? row["ratio"] ?? "";
     const regionRaw = row["İmalat Bölgesi"] ?? row["region"] ?? "";
+    const imalatKotuRaw = row["İmalat Kotu"] ?? row["imalatKotu"] ?? "";
 
     const budgetCode = String(budgetCodeRaw).trim();
     const workItemId = workItemMap.get(budgetCode);
@@ -226,6 +228,7 @@ export function validateWorkProgress(
       quantity,
       ratio: String(ratioRaw).trim() || undefined,
       region: String(regionRaw).trim() || undefined,
+      imalatKotu: String(imalatKotuRaw).trim() || undefined,
     });
   });
 

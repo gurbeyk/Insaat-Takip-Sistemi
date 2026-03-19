@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -12,9 +12,16 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { format, parseISO } from "date-fns";
+import { tr } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { FileSpreadsheet, Upload, Loader2, Download, Clock, TrendingUp, Trash2, Pencil, Check, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { FileSpreadsheet, Upload, Loader2, Download, Clock, TrendingUp, Trash2, Pencil, Check, X, ChevronLeft, ChevronRight, Filter, Calendar } from "lucide-react";
 import * as XLSX from "xlsx";
 import type { Project, WorkItem, DailyEntry } from "@shared/schema";
 import { 
@@ -134,18 +141,53 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
   const [uploadType, setUploadType] = useState<'progress' | 'manhours'>('progress');
   const [deleteEntryId, setDeleteEntryId] = useState<string | null>(null);
   const [editingEntry, setEditingEntry] = useState<string | null>(null);
-  const [editValues, setEditValues] = useState<{ quantity: number; manHours: number; ratio: string; region: string }>({ quantity: 0, manHours: 0, ratio: "", region: "" });
+  const [editValues, setEditValues] = useState<{ quantity: number; manHours: number; ratio: string; region: string; imalatKotu: string }>({ quantity: 0, manHours: 0, ratio: "", region: "", imalatKotu: "" });
   const [editType, setEditType] = useState<'progress' | 'manhours'>('progress');
   
   const [progressPage, setProgressPage] = useState(1);
   const [manHoursPage, setManHoursPage] = useState(1);
 
+  // Filter states for progress entries
+  const [filterStartDate, setFilterStartDate] = useState("");
+  const [filterEndDate, setFilterEndDate] = useState("");
+  const [filterWorkItem, setFilterWorkItem] = useState("all");
+  const [filterRegion, setFilterRegion] = useState("all");
+  const [filterKotu, setFilterKotu] = useState("all");
+
   const { data: entries, isLoading: entriesLoading } = useQuery<(DailyEntry & { workItem?: WorkItem })[]>({
     queryKey: ["/api/projects", project.id, "entries"],
   });
 
-  const progressEntries = (entries || []).filter(e => e.quantity > 0);
+  const allProgressEntries = (entries || []).filter(e => e.quantity > 0);
   const manHoursEntries = (entries || []).filter(e => e.manHours > 0);
+
+  // Unique filter options from progress entries
+  const uniqueWorkItems = useMemo(() => {
+    const names = new Set(allProgressEntries.map(e => e.workItem?.name).filter(Boolean) as string[]);
+    return Array.from(names).sort();
+  }, [allProgressEntries]);
+
+  const uniqueRegions = useMemo(() => {
+    const regions = new Set(allProgressEntries.map(e => parseNotes(e.notes).region).filter(Boolean) as string[]);
+    return Array.from(regions).sort();
+  }, [allProgressEntries]);
+
+  const uniqueKotus = useMemo(() => {
+    const kotus = new Set(allProgressEntries.map(e => (e as any).imalatKotu).filter(Boolean) as string[]);
+    return Array.from(kotus).sort();
+  }, [allProgressEntries]);
+
+  // Apply filters
+  const progressEntries = useMemo(() => {
+    return allProgressEntries.filter(e => {
+      if (filterStartDate && e.entryDate < filterStartDate) return false;
+      if (filterEndDate && e.entryDate > filterEndDate) return false;
+      if (filterWorkItem !== "all" && e.workItem?.name !== filterWorkItem) return false;
+      if (filterRegion !== "all" && parseNotes(e.notes).region !== filterRegion) return false;
+      if (filterKotu !== "all" && (e as any).imalatKotu !== filterKotu) return false;
+      return true;
+    });
+  }, [allProgressEntries, filterStartDate, filterEndDate, filterWorkItem, filterRegion, filterKotu]);
 
   const progressTotalPages = Math.max(1, Math.ceil(progressEntries.length / ITEMS_PER_PAGE));
   const manHoursTotalPages = Math.max(1, Math.ceil(manHoursEntries.length / ITEMS_PER_PAGE));
@@ -340,6 +382,7 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
         "Miktar": 100,
         "Oranlar": "0.5",
         "İmalat Bölgesi": "A Blok",
+        "İmalat Kotu": "+3.50",
       },
     ];
 
@@ -390,6 +433,7 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
         "Miktar": entry.quantity,
         "Oranlar": ratio,
         "İmalat Bölgesi": region,
+        "İmalat Kotu": (entry as any).imalatKotu || "",
       };
     });
 
@@ -434,6 +478,7 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
       manHours: entry.manHours || 0,
       ratio,
       region,
+      imalatKotu: (entry as any).imalatKotu || "",
     });
   };
 
@@ -450,7 +495,7 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
 
   const cancelEditing = () => {
     setEditingEntry(null);
-    setEditValues({ quantity: 0, manHours: 0, ratio: "", region: "" });
+    setEditValues({ quantity: 0, manHours: 0, ratio: "", region: "", imalatKotu: "" });
   };
 
   const saveEditing = (entryId: string) => {
@@ -464,6 +509,7 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
         data: {
           quantity: editValues.quantity,
           notes: noteParts.join(', '),
+          imalatKotu: editValues.imalatKotu || null,
         },
       });
     } else {
@@ -596,7 +642,7 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
               Son Girilen İmalat Verileri
             </CardTitle>
             <CardDescription>
-              İmalat ilerlemesi kayıtları ({progressEntries.length} kayıt)
+              İmalat ilerlemesi kayıtları ({progressEntries.length} / {allProgressEntries.length} kayıt)
             </CardDescription>
           </div>
           <Button
@@ -609,7 +655,126 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
             Dışa Aktar
           </Button>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* Filter Panel */}
+          <div className="bg-muted/40 rounded-lg p-4 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <Filter className="h-4 w-4" />
+              Filtreler
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+              {/* Start Date */}
+              <div className="space-y-1">
+                <Label className="text-xs">Başlangıç Tarihi</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={cn("w-full justify-start text-left font-normal h-8 text-xs", !filterStartDate && "text-muted-foreground")}
+                      data-testid="button-filter-start-date"
+                    >
+                      <Calendar className="mr-1 h-3 w-3" />
+                      {filterStartDate ? format(parseISO(filterStartDate), "dd.MM.yyyy") : "Seçiniz"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={filterStartDate ? parseISO(filterStartDate) : undefined}
+                      onSelect={(date) => { setFilterStartDate(date ? format(date, "yyyy-MM-dd") : ""); setProgressPage(1); }}
+                      initialFocus
+                      locale={tr}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              {/* End Date */}
+              <div className="space-y-1">
+                <Label className="text-xs">Bitiş Tarihi</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={cn("w-full justify-start text-left font-normal h-8 text-xs", !filterEndDate && "text-muted-foreground")}
+                      data-testid="button-filter-end-date"
+                    >
+                      <Calendar className="mr-1 h-3 w-3" />
+                      {filterEndDate ? format(parseISO(filterEndDate), "dd.MM.yyyy") : "Seçiniz"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={filterEndDate ? parseISO(filterEndDate) : undefined}
+                      onSelect={(date) => { setFilterEndDate(date ? format(date, "yyyy-MM-dd") : ""); setProgressPage(1); }}
+                      initialFocus
+                      locale={tr}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              {/* İmalat Kalemi */}
+              <div className="space-y-1">
+                <Label className="text-xs">İmalat Kalemi</Label>
+                <Select value={filterWorkItem} onValueChange={(v) => { setFilterWorkItem(v); setProgressPage(1); }}>
+                  <SelectTrigger className="h-8 text-xs" data-testid="select-filter-work-item">
+                    <SelectValue placeholder="Tümü" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tümü</SelectItem>
+                    {uniqueWorkItems.map(name => (
+                      <SelectItem key={name} value={name}>{name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {/* İmalat Bölgesi */}
+              <div className="space-y-1">
+                <Label className="text-xs">İmalat Bölgesi</Label>
+                <Select value={filterRegion} onValueChange={(v) => { setFilterRegion(v); setProgressPage(1); }}>
+                  <SelectTrigger className="h-8 text-xs" data-testid="select-filter-region">
+                    <SelectValue placeholder="Tümü" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tümü</SelectItem>
+                    {uniqueRegions.map(r => (
+                      <SelectItem key={r} value={r}>{r}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {/* İmalat Kotu */}
+              <div className="space-y-1">
+                <Label className="text-xs">İmalat Kotu</Label>
+                <Select value={filterKotu} onValueChange={(v) => { setFilterKotu(v); setProgressPage(1); }}>
+                  <SelectTrigger className="h-8 text-xs" data-testid="select-filter-kotu">
+                    <SelectValue placeholder="Tümü" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tümü</SelectItem>
+                    {uniqueKotus.map(k => (
+                      <SelectItem key={k} value={k}>{k}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {(filterStartDate || filterEndDate || filterWorkItem !== "all" || filterRegion !== "all" || filterKotu !== "all") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-muted-foreground"
+                onClick={() => { setFilterStartDate(""); setFilterEndDate(""); setFilterWorkItem("all"); setFilterRegion("all"); setFilterKotu("all"); setProgressPage(1); }}
+                data-testid="button-clear-filters"
+              >
+                <X className="h-3 w-3 mr-1" />
+                Filtreleri Temizle
+              </Button>
+            )}
+          </div>
+
           {entriesLoading ? (
             <div className="space-y-2">
               {[1, 2, 3].map((i) => (
@@ -629,6 +794,7 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
                       <TableHead className="text-right">Miktar</TableHead>
                       <TableHead>Oranlar</TableHead>
                       <TableHead>İmalat Bölgesi</TableHead>
+                      <TableHead>İmalat Kotu</TableHead>
                       <TableHead className="text-right">İşlemler</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -636,6 +802,7 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
                     {paginatedProgressEntries.map((entry) => {
                       const { region, ratio } = parseNotes(entry.notes);
                       const isEditing = editingEntry === entry.id && editType === 'progress';
+                      const entryKotu = (entry as any).imalatKotu || "";
                       
                       return (
                         <TableRow key={entry.id} data-testid={`row-progress-entry-${entry.id}`}>
@@ -684,6 +851,20 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
                               />
                             ) : (
                               region || "-"
+                            )}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {isEditing ? (
+                              <Input
+                                type="text"
+                                value={editValues.imalatKotu}
+                                onChange={(e) => setEditValues({ ...editValues, imalatKotu: e.target.value })}
+                                className="w-20"
+                                placeholder="+3.50"
+                                data-testid={`input-edit-kotu-${entry.id}`}
+                              />
+                            ) : (
+                              entryKotu || "-"
                             )}
                           </TableCell>
                           <TableCell className="text-right">
@@ -749,7 +930,7 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
             </>
           ) : (
             <p className="text-sm text-muted-foreground text-center py-8">
-              Henüz imalat verisi girilmemiş
+              {allProgressEntries.length > 0 ? "Seçili filtrelere uygun kayıt bulunamadı" : "Henüz imalat verisi girilmemiş"}
             </p>
           )}
         </CardContent>

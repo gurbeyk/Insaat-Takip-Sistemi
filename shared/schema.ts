@@ -79,6 +79,7 @@ export const dailyEntries = pgTable("daily_entries", {
   manHours: real("man_hours").notNull().default(0),
   quantity: real("quantity").notNull().default(0), // metraj
   notes: text("notes"),
+  imalatKotu: varchar("imalat_kotu"),
   enteredBy: varchar("entered_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
