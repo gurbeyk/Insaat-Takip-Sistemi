@@ -29,7 +29,7 @@ const dailyEntryRowSchema = z.object({
   workItemId: z.string().min(1, "İmalat kalemi seçilmeli"),
   entryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Tarih YYYY-MM-DD formatında olmalı"),
   manHours: z.number().min(0, "Adam-saat 0'dan küçük olamaz"),
-  quantity: z.number().min(0, "Miktar 0'dan küçük olamaz"),
+  quantity: z.number(),
   notes: z.string().optional(),
 });
 
@@ -213,7 +213,7 @@ export function validateWorkProgress(
     const entryDate = parseDateSafe(entryDateRaw, rowNum, errors);
     if (!entryDate) return;
 
-    const quantity = parseNumberSafe(quantityRaw, "Miktar", rowNum, errors);
+    const quantity = parseNumberSafe(quantityRaw, "Miktar", rowNum, errors, true);
 
     if (quantity === null) return;
 
@@ -404,7 +404,8 @@ function parseNumberSafe(
   value: unknown,
   field: string,
   row: number,
-  errors: ValidationError[]
+  errors: ValidationError[],
+  allowNegative = false
 ): number | null {
   if (value === undefined || value === null || value === "") {
     return 0;
@@ -421,7 +422,7 @@ function parseNumberSafe(
     return null;
   }
 
-  if (numValue < 0) {
+  if (!allowNegative && numValue < 0) {
     errors.push({
       row,
       field,
