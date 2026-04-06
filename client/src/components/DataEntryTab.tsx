@@ -159,7 +159,7 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
   });
 
   const allProgressEntries = (entries || []).filter(e => e.quantity !== 0);
-  const manHoursEntries = (entries || []).filter(e => e.manHours > 0);
+  const manHoursEntries = (entries || []).filter(e => e.manHours !== 0);
 
   // Unique filter options from progress entries
   const uniqueWorkItems = useMemo(() => {

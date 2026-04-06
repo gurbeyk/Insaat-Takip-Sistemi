@@ -28,7 +28,7 @@ export type WorkItemRow = z.infer<typeof workItemRowSchema>;
 const dailyEntryRowSchema = z.object({
   workItemId: z.string().min(1, "İmalat kalemi seçilmeli"),
   entryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Tarih YYYY-MM-DD formatında olmalı"),
-  manHours: z.number().min(0, "Adam-saat 0'dan küçük olamaz"),
+  manHours: z.number(),
   quantity: z.number(),
   notes: z.string().optional(),
 });
@@ -295,7 +295,7 @@ export function validateManHours(
     const entryDate = parseDateSafe(entryDateRaw, rowNum, errors);
     if (!entryDate) return;
 
-    const manHours = parseNumberSafe(manHoursRaw, "Miktar (Adam-Saat)", rowNum, errors);
+    const manHours = parseNumberSafe(manHoursRaw, "Miktar (Adam-Saat)", rowNum, errors, true);
 
     if (manHours === null) return;
 
@@ -378,8 +378,8 @@ export function validateDailyEntries(
     const entryDate = parseDateSafe(entryDateRaw, rowNum, errors);
     if (!entryDate) return;
 
-    const manHours = parseNumberSafe(manHoursRaw, "Adam-Saat", rowNum, errors);
-    const quantity = parseNumberSafe(quantityRaw, "Miktar", rowNum, errors);
+    const manHours = parseNumberSafe(manHoursRaw, "Adam-Saat", rowNum, errors, true);
+    const quantity = parseNumberSafe(quantityRaw, "Miktar", rowNum, errors, true);
 
     if (manHours === null || quantity === null) return;
 
