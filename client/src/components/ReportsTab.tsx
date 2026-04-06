@@ -189,6 +189,8 @@ export function ReportsTab({ project }: ReportsTabProps) {
           const targetUnitMH = wi.targetManHours;
           const efficiency = progressUnitMH > 0 && targetUnitMH > 0 ? (targetUnitMH / progressUnitMH) * 100 : 0;
           return {
+            "Bütçe Kodu Üst Öge": (wi as any).parentBudgetCode || "",
+            "İmalat Ayrımı": (wi as any).category || "",
             "Bütçe Kodu": wi.budgetCode,
             "İmalat Kalemi": wi.name,
             "Birim": wi.unit,
@@ -196,6 +198,7 @@ export function ReportsTab({ project }: ReportsTabProps) {
             "Gerçekleşen Miktar": Number(wi.actualQuantity.toFixed(2)),
             "Hedef Birim A-S": Number(targetUnitMH.toFixed(2)),
             "Gerçekleşen Adam-Saat": wi.actualManHours,
+            "Kazanılan Adam-Saat": Number(wi.earnedManHours.toFixed(2)),
             "Birim A-S (Gerçekleşen)": progressUnitMH > 0 ? Number(progressUnitMH.toFixed(2)) : "-",
             "İlerleme (%)": Math.round(wi.progressPercent),
             "Verimlilik (%)": progressUnitMH > 0 && targetUnitMH > 0 ? Math.round(efficiency) : "-",

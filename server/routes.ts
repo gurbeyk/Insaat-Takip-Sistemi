@@ -1229,6 +1229,8 @@ export async function registerRoutes(
         const earnedManHours = totalQuantity * (wi.targetManHours || 0);
         return {
           id: wi.id,
+          parentBudgetCode: wi.parentBudgetCode || "",
+          category: wi.category || "",
           budgetCode: wi.budgetCode,
           name: wi.name,
           unit: wi.unit,

@@ -158,7 +158,7 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
     queryKey: ["/api/projects", project.id, "entries"],
   });
 
-  const allProgressEntries = (entries || []).filter(e => e.quantity > 0);
+  const allProgressEntries = (entries || []).filter(e => e.quantity !== 0);
   const manHoursEntries = (entries || []).filter(e => e.manHours > 0);
 
   // Unique filter options from progress entries
