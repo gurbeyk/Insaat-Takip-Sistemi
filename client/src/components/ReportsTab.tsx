@@ -699,9 +699,17 @@ export function ReportsTab({ project }: ReportsTabProps) {
                           <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                           <XAxis
                             dataKey="week"
-                            fontSize={12}
+                            fontSize={11}
                             tick={{ fill: "hsl(var(--muted-foreground))" }}
-                            tickFormatter={(w) => w.split("-W")[1] ? `H${w.split("-W")[1]}` : w}
+                            tickFormatter={(w) => {
+                              // Format: "20.04.2026 - 26.04.2026" → "20.04"
+                              const parts = w.split(" - ");
+                              if (parts.length === 2) {
+                                const start = parts[0].split(".");
+                                return `${start[0]}.${start[1]}`;
+                              }
+                              return w;
+                            }}
                           />
                           <YAxis
                             fontSize={12}
@@ -713,6 +721,7 @@ export function ReportsTab({ project }: ReportsTabProps) {
                               border: "1px solid hsl(var(--border))",
                               borderRadius: "8px",
                             }}
+                            labelFormatter={(w) => `Hafta: ${w}`}
                           />
                           <Legend />
                           <Bar
@@ -758,9 +767,16 @@ export function ReportsTab({ project }: ReportsTabProps) {
                           <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                           <XAxis
                             dataKey="week"
-                            fontSize={12}
+                            fontSize={11}
                             tick={{ fill: "hsl(var(--muted-foreground))" }}
-                            tickFormatter={(w) => w.split("-W")[1] ? `H${w.split("-W")[1]}` : w}
+                            tickFormatter={(w) => {
+                              const parts = w.split(" - ");
+                              if (parts.length === 2) {
+                                const start = parts[0].split(".");
+                                return `${start[0]}.${start[1]}`;
+                              }
+                              return w;
+                            }}
                           />
                           <YAxis
                             fontSize={12}
@@ -772,6 +788,7 @@ export function ReportsTab({ project }: ReportsTabProps) {
                               border: "1px solid hsl(var(--border))",
                               borderRadius: "8px",
                             }}
+                            labelFormatter={(w) => `Hafta: ${w}`}
                             formatter={(value: number) => [`${value.toLocaleString("tr-TR")} m³`, "Beton"]}
                           />
                           <Legend />

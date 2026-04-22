@@ -1070,15 +1070,27 @@ export async function registerRoutes(
       // Get the last day's stats
       const lastDayStats = daily.length > 0 ? daily[daily.length - 1] : null;
 
-      const weeklyData: Record<string, { manHours: number; quantity: number; target: number; earnedManHours: number; concrete: number; formwork: number; rebar: number }> = {};
+      const weeklyData: Record<string, { manHours: number; quantity: number; target: number; earnedManHours: number; concrete: number; formwork: number; rebar: number; sortKey: string }> = {};
+      const pad2 = (n: number) => String(n).padStart(2, "0");
       daily.forEach((item) => {
-        const date = new Date(item.date);
-        const weekStart = new Date(date);
-        weekStart.setDate(date.getDate() - date.getDay() + 1);
-        const weekKey = `${weekStart.getFullYear()}-W${String(Math.ceil((weekStart.getDate() + new Date(weekStart.getFullYear(), 0, 1).getDay()) / 7)).padStart(2, "0")}`;
+        // Parse date parts directly to avoid timezone issues
+        const [y, m, d] = item.date.split("-").map(Number);
+        const date = new Date(y, m - 1, d);
+        const dayOfWeek = date.getDay(); // 0=Sunday … 6=Saturday
+        // Offset to Monday: Sunday → -6, Monday → 0, Tue → -1, …, Sat → -5
+        const offsetToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+        const mondayDate = new Date(date);
+        mondayDate.setDate(date.getDate() + offsetToMonday);
+        const sundayDate = new Date(mondayDate);
+        sundayDate.setDate(mondayDate.getDate() + 6);
+
+        // Sortable key: YYYY-MM-DD of Monday
+        const sortKey = `${mondayDate.getFullYear()}-${pad2(mondayDate.getMonth() + 1)}-${pad2(mondayDate.getDate())}`;
+        // Display key: "DD.MM.YYYY - DD.MM.YYYY"
+        const weekKey = `${pad2(mondayDate.getDate())}.${pad2(mondayDate.getMonth() + 1)}.${mondayDate.getFullYear()} - ${pad2(sundayDate.getDate())}.${pad2(sundayDate.getMonth() + 1)}.${sundayDate.getFullYear()}`;
 
         if (!weeklyData[weekKey]) {
-          weeklyData[weekKey] = { manHours: 0, quantity: 0, target: 0, earnedManHours: 0, concrete: 0, formwork: 0, rebar: 0 };
+          weeklyData[weekKey] = { manHours: 0, quantity: 0, target: 0, earnedManHours: 0, concrete: 0, formwork: 0, rebar: 0, sortKey };
         }
         weeklyData[weekKey].manHours += item.manHours;
         weeklyData[weekKey].quantity += item.quantity;
@@ -1090,7 +1102,7 @@ export async function registerRoutes(
       });
 
       const weekly = Object.entries(weeklyData)
-        .sort(([a], [b]) => a.localeCompare(b))
+        .sort(([, a], [, b]) => a.sortKey.localeCompare(b.sortKey))
         .map(([week, data]) => ({
           week,
           manHours: data.manHours,
