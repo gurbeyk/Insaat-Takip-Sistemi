@@ -692,10 +692,14 @@ export function ReportsTab({ project }: ReportsTabProps) {
                 <CardContent>
                   {(() => {
                     const recentWeeklyData = reportData?.weekly?.slice(-8) || [];
+                    const avgMH = recentWeeklyData.length > 0
+                      ? recentWeeklyData.reduce((s, w) => s + w.manHours, 0) / recentWeeklyData.length
+                      : 0;
+                    const weeklyMHData = recentWeeklyData.map((w) => ({ ...w, avgManHours: Math.round(avgMH) }));
                     
-                    return recentWeeklyData.length > 0 ? (
+                    return weeklyMHData.length > 0 ? (
                       <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={recentWeeklyData}>
+                        <ComposedChart data={weeklyMHData}>
                           <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                           <XAxis
                             dataKey="week"
@@ -737,7 +741,16 @@ export function ReportsTab({ project }: ReportsTabProps) {
                             radius={[4, 4, 0, 0]}
                             opacity={0.5}
                           />
-                        </BarChart>
+                          <Line
+                            dataKey="avgManHours"
+                            name="Ortalama A-S"
+                            stroke="#f59e0b"
+                            strokeWidth={2}
+                            strokeDasharray="6 3"
+                            dot={false}
+                            type="monotone"
+                          />
+                        </ComposedChart>
                       </ResponsiveContainer>
                     ) : (
                       <div className="h-[300px] flex items-center justify-center text-muted-foreground">
@@ -760,10 +773,14 @@ export function ReportsTab({ project }: ReportsTabProps) {
                 <CardContent>
                   {(() => {
                     const recentWeeklyData = reportData?.weekly?.slice(-8) || [];
+                    const avgConcrete = recentWeeklyData.length > 0
+                      ? recentWeeklyData.reduce((s, w) => s + w.concrete, 0) / recentWeeklyData.length
+                      : 0;
+                    const weeklyConcreteData = recentWeeklyData.map((w) => ({ ...w, avgConcrete: Math.round(avgConcrete) }));
                     
-                    return recentWeeklyData.length > 0 ? (
+                    return weeklyConcreteData.length > 0 ? (
                       <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={recentWeeklyData}>
+                        <ComposedChart data={weeklyConcreteData}>
                           <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                           <XAxis
                             dataKey="week"
@@ -789,7 +806,12 @@ export function ReportsTab({ project }: ReportsTabProps) {
                               borderRadius: "8px",
                             }}
                             labelFormatter={(w) => `Hafta: ${w}`}
-                            formatter={(value: number) => [`${value.toLocaleString("tr-TR")} m³`, "Beton"]}
+                            formatter={(value: number, name: string) => [
+                              name === "Ortalama Beton"
+                                ? `${value.toLocaleString("tr-TR")} m³`
+                                : `${value.toLocaleString("tr-TR")} m³`,
+                              name,
+                            ]}
                           />
                           <Legend />
                           <Bar
@@ -798,7 +820,16 @@ export function ReportsTab({ project }: ReportsTabProps) {
                             fill={chartColors.quantity}
                             radius={[4, 4, 0, 0]}
                           />
-                        </BarChart>
+                          <Line
+                            dataKey="avgConcrete"
+                            name="Ortalama Beton"
+                            stroke="#f59e0b"
+                            strokeWidth={2}
+                            strokeDasharray="6 3"
+                            dot={false}
+                            type="monotone"
+                          />
+                        </ComposedChart>
                       </ResponsiveContainer>
                     ) : (
                       <div className="h-[300px] flex items-center justify-center text-muted-foreground">
