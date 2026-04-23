@@ -1161,16 +1161,39 @@ export async function registerRoutes(
         });
 
       // Calculate monthly concrete performance (m3 work items only)
-      const monthlyConcreteData: Record<string, { actual: number; planned: number }> = {};
+      const monthlyConcreteData: Record<string, { actual: number; planned: number; manHours: number; earnedManHours: number }> = {};
+
+      // Build a lookup of monthly manHours and earnedManHours from all entries
+      const monthlyMHLookup: Record<string, { manHours: number; earnedManHours: number }> = {};
+      entries.forEach((entry) => {
+        const monthKey = entry.entryDate.substring(0, 7);
+        if (!monthlyMHLookup[monthKey]) {
+          monthlyMHLookup[monthKey] = { manHours: 0, earnedManHours: 0 };
+        }
+        monthlyMHLookup[monthKey].manHours += entry.manHours || 0;
+        const wi = workItems.find((w) => w.id === entry.workItemId);
+        if (wi) {
+          monthlyMHLookup[monthKey].earnedManHours += (entry.quantity || 0) * (wi.targetManHours || 0);
+        }
+      });
 
       // Get actual concrete from daily entries (only m3 work items)
       entries.forEach((entry) => {
         if (m3WorkItemIds.has(entry.workItemId)) {
           const monthKey = entry.entryDate.substring(0, 7);
           if (!monthlyConcreteData[monthKey]) {
-            monthlyConcreteData[monthKey] = { actual: 0, planned: 0 };
+            monthlyConcreteData[monthKey] = { actual: 0, planned: 0, manHours: 0, earnedManHours: 0 };
           }
           monthlyConcreteData[monthKey].actual += entry.quantity || 0;
+        }
+      });
+
+      // Attach monthly MH totals to concrete data
+      Object.keys(monthlyConcreteData).forEach((monthKey) => {
+        const mh = monthlyMHLookup[monthKey];
+        if (mh) {
+          monthlyConcreteData[monthKey].manHours = mh.manHours;
+          monthlyConcreteData[monthKey].earnedManHours = mh.earnedManHours;
         }
       });
 
@@ -1212,11 +1235,19 @@ export async function registerRoutes(
 
       const monthlyConcrete = Object.entries(monthlyConcreteData)
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([month, data]) => ({
-          month,
-          actual: data.actual,
-          planned: data.planned,
-        }));
+        .map(([month, data]) => {
+          const spentPerConcrete = data.actual > 0 ? parseFloat((data.manHours / data.actual).toFixed(2)) : null;
+          const earnedPerConcrete = data.actual > 0 ? parseFloat((data.earnedManHours / data.actual).toFixed(2)) : null;
+          return {
+            month,
+            actual: data.actual,
+            planned: data.planned,
+            manHours: data.manHours,
+            earnedManHours: data.earnedManHours,
+            spentPerConcrete,
+            earnedPerConcrete,
+          };
+        });
 
       let cumulativeManHours = 0;
       let cumulativeQuantity = 0;

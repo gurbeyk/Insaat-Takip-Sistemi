@@ -80,7 +80,7 @@ interface ReportData {
   daily: DailyData[];
   weekly: WeeklyData[];
   monthly: { month: string; manHours: number; quantity: number; target: number; earnedManHours: number; cumulativeManHours: number; cumulativeEarnedManHours: number }[];
-  monthlyConcrete: { month: string; actual: number; planned: number }[];
+  monthlyConcrete: { month: string; actual: number; planned: number; manHours: number; earnedManHours: number; spentPerConcrete: number | null; earnedPerConcrete: number | null }[];
   cumulative: { date: string; cumulativeManHours: number; cumulativeQuantity: number; cumulativeTarget: number }[];
   workItems: WorkItemStats[];
   lastDayStats: DailyData | null;
@@ -954,13 +954,13 @@ export function ReportsTab({ project }: ReportsTabProps) {
               <CardHeader>
                 <CardTitle className="text-lg">Aylık İmalat Performansı (Beton - m³)</CardTitle>
                 <CardDescription>
-                  Aylık beton imalat miktarları: Gerçekleşen (mavi) ve İş Programı (turuncu)
+                  Beton miktarı (sol eksen): Gerçekleşen (mavi) ve İş Programı (turuncu) · A-S/m³ oranı (sağ eksen): Harcanan (kırmızı kesik) ve Kazanılan (yeşil kesik)
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 {reportData?.monthlyConcrete && reportData.monthlyConcrete.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={350}>
-                    <BarChart data={reportData.monthlyConcrete}>
+                  <ResponsiveContainer width="100%" height={380}>
+                    <ComposedChart data={reportData.monthlyConcrete}>
                       <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                       <XAxis
                         dataKey="month"
@@ -968,10 +968,23 @@ export function ReportsTab({ project }: ReportsTabProps) {
                         fontSize={12}
                         tick={{ fill: "hsl(var(--muted-foreground))" }}
                       />
+                      {/* Left axis: concrete m³ */}
                       <YAxis
+                        yAxisId="left"
+                        orientation="left"
                         fontSize={12}
                         tick={{ fill: "hsl(var(--muted-foreground))" }}
-                        tickFormatter={(value) => `${value.toLocaleString("tr-TR")}`}
+                        tickFormatter={(v) => v.toLocaleString("tr-TR")}
+                        label={{ value: "m³", angle: -90, position: "insideLeft", offset: 10, fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
+                      />
+                      {/* Right axis: A-S / m³ ratio */}
+                      <YAxis
+                        yAxisId="right"
+                        orientation="right"
+                        fontSize={12}
+                        tick={{ fill: "hsl(var(--muted-foreground))" }}
+                        tickFormatter={(v) => v.toLocaleString("tr-TR")}
+                        label={{ value: "A-S/m³", angle: 90, position: "insideRight", offset: 10, fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
                       />
                       <Tooltip
                         contentStyle={{
@@ -980,28 +993,57 @@ export function ReportsTab({ project }: ReportsTabProps) {
                           borderRadius: "8px",
                         }}
                         labelFormatter={formatTurkishMonth}
-                        formatter={(value: number, name: string) => [
-                          `${value.toLocaleString("tr-TR", { maximumFractionDigits: 2 })} m³`,
-                          name
-                        ]}
+                        formatter={(value: unknown, name: string) => {
+                          const num = Number(value);
+                          if (value === null || value === undefined || isNaN(num)) return ["-", name];
+                          if (name === "Harcanan A-S/m³" || name === "Kazanılan A-S/m³") {
+                            return [`${num.toLocaleString("tr-TR", { maximumFractionDigits: 2 })} a-s/m³`, name];
+                          }
+                          return [`${num.toLocaleString("tr-TR", { maximumFractionDigits: 2 })} m³`, name];
+                        }}
                       />
                       <Legend />
                       <Bar
+                        yAxisId="left"
                         dataKey="actual"
                         name="Gerçekleşen"
                         fill="#3b82f6"
                         radius={[4, 4, 0, 0]}
                       />
                       <Bar
+                        yAxisId="left"
                         dataKey="planned"
                         name="İş Programı"
                         fill="#f97316"
                         radius={[4, 4, 0, 0]}
+                        opacity={0.7}
                       />
-                    </BarChart>
+                      <Line
+                        yAxisId="right"
+                        dataKey="spentPerConcrete"
+                        name="Harcanan A-S/m³"
+                        stroke="#ef4444"
+                        strokeWidth={2}
+                        strokeDasharray="5 3"
+                        dot={{ r: 3, fill: "#ef4444" }}
+                        type="monotone"
+                        connectNulls={false}
+                      />
+                      <Line
+                        yAxisId="right"
+                        dataKey="earnedPerConcrete"
+                        name="Kazanılan A-S/m³"
+                        stroke="#22c55e"
+                        strokeWidth={2}
+                        strokeDasharray="5 3"
+                        dot={{ r: 3, fill: "#22c55e" }}
+                        type="monotone"
+                        connectNulls={false}
+                      />
+                    </ComposedChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="h-[350px] flex items-center justify-center text-muted-foreground">
+                  <div className="h-[380px] flex items-center justify-center text-muted-foreground">
                     Henüz veri bulunmuyor
                   </div>
                 )}
