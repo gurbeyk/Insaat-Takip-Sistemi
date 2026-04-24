@@ -775,6 +775,31 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
             )}
           </div>
 
+          {/* Filtered quantity totals */}
+          {progressEntries.length > 0 && (() => {
+            const totals: Record<string, number> = {};
+            progressEntries.forEach(e => {
+              const unit = e.workItem?.unit || "—";
+              totals[unit] = (totals[unit] || 0) + (e.quantity || 0);
+            });
+            return (
+              <div className="flex flex-wrap items-center gap-2 px-1 py-1.5 text-sm" data-testid="progress-quantity-totals">
+                <span className="text-muted-foreground font-medium">
+                  {progressEntries.length} kayıt · Toplam:
+                </span>
+                {Object.entries(totals).map(([unit, total]) => (
+                  <span
+                    key={unit}
+                    className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary"
+                    data-testid={`total-quantity-${unit}`}
+                  >
+                    {total.toLocaleString("tr-TR", { maximumFractionDigits: 3 })} {unit}
+                  </span>
+                ))}
+              </div>
+            );
+          })()}
+
           {entriesLoading ? (
             <div className="space-y-2">
               {[1, 2, 3].map((i) => (
