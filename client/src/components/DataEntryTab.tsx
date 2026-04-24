@@ -790,7 +790,7 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
                 {Object.entries(totals).map(([unit, total]) => (
                   <span
                     key={unit}
-                    className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary"
+                    className="inline-flex items-center rounded-md bg-red-100 dark:bg-red-950 px-2 py-0.5 text-xs font-bold text-red-600 dark:text-red-400"
                     data-testid={`total-quantity-${unit}`}
                   >
                     {total.toLocaleString("tr-TR", { maximumFractionDigits: 3 })} {unit}
