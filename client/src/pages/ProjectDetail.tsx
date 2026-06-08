@@ -95,7 +95,9 @@ export default function ProjectDetail() {
       return response.json();
     },
     enabled: !!project?.location,
-    staleTime: 1000 * 60 * 30, // 30 minutes cache
+    staleTime: 1000 * 60 * 30,
+    retry: 3,
+    retryDelay: 2000,
   });
 
   const calculateProgress = (spent: number, planned: number) => {
@@ -248,6 +250,17 @@ export default function ProjectDetail() {
       earnedMH: monthlyEarnedMH,
       efficiency,
     };
+  }, [project]);
+
+  // Total project earned man-hours (all time)
+  const projectTotalEarnedMH = useMemo(() => {
+    if (!project) return 0;
+    const workItemMap = new Map(project.workItems?.map(w => [w.id, w]) || []);
+    return (project.dailyEntries || []).reduce((sum, entry) => {
+      const wi = workItemMap.get(entry.workItemId);
+      if (!wi) return sum;
+      return sum + (entry.quantity || 0) * (wi.targetManHours || 0);
+    }, 0);
   }, [project]);
 
   if (isLoading) {
@@ -405,22 +418,29 @@ export default function ProjectDetail() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
-              <div className="p-3 rounded-lg bg-orange-500/10">
-                <Calendar className="h-6 w-6 text-orange-600" />
+              <div className="p-3 rounded-lg bg-purple-500/10">
+                <TrendingUp className="h-6 w-6 text-purple-600" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-2xl font-bold truncate">
-                  {project.elapsedDays || 0}
-                </p>
-                <p className="text-sm text-muted-foreground">Geçen Gün</p>
+                {(() => {
+                  const spentMH = project.spentManHours || 0;
+                  const efficiency = spentMH > 0 ? (projectTotalEarnedMH / spentMH) * 100 : 0;
+                  return (
+                    <>
+                      <p className={`text-2xl font-bold truncate ${efficiency >= 100 ? 'text-green-600' : efficiency >= 80 ? 'text-yellow-600' : 'text-orange-600'}`}>
+                        {spentMH > 0 ? `%${efficiency.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}` : "-"}
+                      </p>
+                      <p className="text-sm text-muted-foreground">Verimlilik (%)</p>
+                    </>
+                  );
+                })()}
               </div>
             </div>
             <div className="mt-3">
               <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                <span>Süre</span>
-                <span>{project.totalDuration || 0} gün</span>
+                <span>Kazanılan / Harcanan</span>
+                <span>{projectTotalEarnedMH.toLocaleString("tr-TR", { maximumFractionDigits: 0 })} / {(project.spentManHours || 0).toLocaleString("tr-TR", { maximumFractionDigits: 0 })}</span>
               </div>
-              <Progress value={timeProgress} className={`h-1.5 ${getProgressColor(timeProgress)}`} />
             </div>
           </CardContent>
         </Card>
@@ -981,6 +1001,28 @@ export default function ProjectDetail() {
                     Hava durumu bilgisi alınamadı
                   </p>
                 )}
+              </CardContent>
+            </Card>
+
+            {/* Geçen Gün */}
+            <Card className="mt-4">
+              <CardContent className="pt-5 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-lg bg-orange-500/10">
+                    <Calendar className="h-5 w-5 text-orange-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xl font-bold">{project.elapsedDays || 0} <span className="text-sm font-normal text-muted-foreground">/ {project.totalDuration || 0} gün</span></p>
+                    <p className="text-xs text-muted-foreground">Geçen Gün</p>
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                    <span>Süre İlerlemesi</span>
+                    <span>{Math.round(timeProgress)}%</span>
+                  </div>
+                  <Progress value={timeProgress} className={`h-1.5 ${getProgressColor(timeProgress)}`} />
+                </div>
               </CardContent>
             </Card>
           </div>
