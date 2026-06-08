@@ -154,18 +154,29 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
   const [filterRegion, setFilterRegion] = useState("all");
   const [filterKotu, setFilterKotu] = useState("all");
 
+  // Filter states for man-hours entries
+  const [mhFilterStartDate, setMhFilterStartDate] = useState("");
+  const [mhFilterEndDate, setMhFilterEndDate] = useState("");
+  const [mhFilterWorkItem, setMhFilterWorkItem] = useState("all");
+
   const { data: entries, isLoading: entriesLoading } = useQuery<(DailyEntry & { workItem?: WorkItem })[]>({
     queryKey: ["/api/projects", project.id, "entries"],
   });
 
   const allProgressEntries = (entries || []).filter(e => e.quantity !== 0);
-  const manHoursEntries = (entries || []).filter(e => e.manHours !== 0);
+  const allManHoursEntries = (entries || []).filter(e => e.manHours !== 0);
 
   // Unique filter options from progress entries
   const uniqueWorkItems = useMemo(() => {
     const names = new Set(allProgressEntries.map(e => e.workItem?.name).filter(Boolean) as string[]);
     return Array.from(names).sort();
   }, [allProgressEntries]);
+
+  // Unique work items from man-hours entries
+  const uniqueMhWorkItems = useMemo(() => {
+    const names = new Set(allManHoursEntries.map(e => e.workItem?.name).filter(Boolean) as string[]);
+    return Array.from(names).sort();
+  }, [allManHoursEntries]);
 
   const uniqueRegions = useMemo(() => {
     const regions = new Set(allProgressEntries.map(e => parseNotes(e.notes).region).filter(Boolean) as string[]);
@@ -177,7 +188,7 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
     return Array.from(kotus).sort();
   }, [allProgressEntries]);
 
-  // Apply filters
+  // Apply filters to progress entries
   const progressEntries = useMemo(() => {
     return allProgressEntries.filter(e => {
       if (filterStartDate && e.entryDate < filterStartDate) return false;
@@ -188,6 +199,16 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
       return true;
     });
   }, [allProgressEntries, filterStartDate, filterEndDate, filterWorkItem, filterRegion, filterKotu]);
+
+  // Apply filters to man-hours entries
+  const manHoursEntries = useMemo(() => {
+    return allManHoursEntries.filter(e => {
+      if (mhFilterStartDate && e.entryDate < mhFilterStartDate) return false;
+      if (mhFilterEndDate && e.entryDate > mhFilterEndDate) return false;
+      if (mhFilterWorkItem !== "all" && e.workItem?.name !== mhFilterWorkItem) return false;
+      return true;
+    });
+  }, [allManHoursEntries, mhFilterStartDate, mhFilterEndDate, mhFilterWorkItem]);
 
   const progressTotalPages = Math.max(1, Math.ceil(progressEntries.length / ITEMS_PER_PAGE));
   const manHoursTotalPages = Math.max(1, Math.ceil(manHoursEntries.length / ITEMS_PER_PAGE));
@@ -970,7 +991,7 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
               Son Girilen Adam-Saat Verileri
             </CardTitle>
             <CardDescription>
-              Adam-saat gerçekleşme kayıtları ({manHoursEntries.length} kayıt)
+              Adam-saat gerçekleşme kayıtları ({manHoursEntries.length} / {allManHoursEntries.length} kayıt)
             </CardDescription>
           </div>
           <Button
@@ -983,7 +1004,96 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
             Dışa Aktar
           </Button>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* Filter Panel */}
+          <div className="bg-muted/40 rounded-lg p-4 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <Filter className="h-4 w-4" />
+              Filtreler
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {/* Start Date */}
+              <div className="space-y-1">
+                <Label className="text-xs">Başlangıç Tarihi</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={cn("w-full justify-start text-left font-normal h-8 text-xs", !mhFilterStartDate && "text-muted-foreground")}
+                      data-testid="button-mh-filter-start-date"
+                    >
+                      <Calendar className="mr-1 h-3 w-3" />
+                      {mhFilterStartDate ? format(parseISO(mhFilterStartDate), "dd.MM.yyyy") : "Seçiniz"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={mhFilterStartDate ? parseISO(mhFilterStartDate) : undefined}
+                      onSelect={(date) => { setMhFilterStartDate(date ? format(date, "yyyy-MM-dd") : ""); setManHoursPage(1); }}
+                      initialFocus
+                      locale={tr}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              {/* End Date */}
+              <div className="space-y-1">
+                <Label className="text-xs">Bitiş Tarihi</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={cn("w-full justify-start text-left font-normal h-8 text-xs", !mhFilterEndDate && "text-muted-foreground")}
+                      data-testid="button-mh-filter-end-date"
+                    >
+                      <Calendar className="mr-1 h-3 w-3" />
+                      {mhFilterEndDate ? format(parseISO(mhFilterEndDate), "dd.MM.yyyy") : "Seçiniz"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <CalendarComponent
+                      mode="single"
+                      selected={mhFilterEndDate ? parseISO(mhFilterEndDate) : undefined}
+                      onSelect={(date) => { setMhFilterEndDate(date ? format(date, "yyyy-MM-dd") : ""); setManHoursPage(1); }}
+                      initialFocus
+                      locale={tr}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              {/* İmalat Kalemi */}
+              <div className="space-y-1">
+                <Label className="text-xs">İmalat Kalemi</Label>
+                <Select value={mhFilterWorkItem} onValueChange={(v) => { setMhFilterWorkItem(v); setManHoursPage(1); }}>
+                  <SelectTrigger className="h-8 text-xs" data-testid="select-mh-filter-work-item">
+                    <SelectValue placeholder="Tümü" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tümü</SelectItem>
+                    {uniqueMhWorkItems.map(name => (
+                      <SelectItem key={name} value={name}>{name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {(mhFilterStartDate || mhFilterEndDate || mhFilterWorkItem !== "all") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-muted-foreground"
+                onClick={() => { setMhFilterStartDate(""); setMhFilterEndDate(""); setMhFilterWorkItem("all"); setManHoursPage(1); }}
+                data-testid="button-clear-mh-filters"
+              >
+                <X className="h-3 w-3 mr-1" />
+                Filtreleri Temizle
+              </Button>
+            )}
+          </div>
+
           {entriesLoading ? (
             <div className="space-y-2">
               {[1, 2, 3].map((i) => (
