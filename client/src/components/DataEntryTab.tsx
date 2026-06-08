@@ -1094,6 +1094,24 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
             )}
           </div>
 
+          {/* Filtered man-hours total */}
+          {manHoursEntries.length > 0 && (() => {
+            const totalMH = manHoursEntries.reduce((sum, e) => sum + (e.manHours || 0), 0);
+            return (
+              <div className="flex flex-wrap items-center gap-2 px-1 py-1.5 text-sm" data-testid="manhours-total">
+                <span className="text-muted-foreground font-medium">
+                  {manHoursEntries.length} kayıt · Toplam:
+                </span>
+                <span
+                  className="inline-flex items-center rounded-md bg-blue-100 dark:bg-blue-950 px-2 py-0.5 text-xs font-bold text-blue-600 dark:text-blue-400"
+                  data-testid="total-manhours"
+                >
+                  {totalMH.toLocaleString("tr-TR", { maximumFractionDigits: 2 })} Ad.sa
+                </span>
+              </div>
+            );
+          })()}
+
           {entriesLoading ? (
             <div className="space-y-2">
               {[1, 2, 3].map((i) => (
