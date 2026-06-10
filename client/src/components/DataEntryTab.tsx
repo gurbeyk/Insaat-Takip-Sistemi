@@ -151,6 +151,7 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate, setFilterEndDate] = useState("");
   const [filterWorkItem, setFilterWorkItem] = useState("all");
+  const [filterUnit, setFilterUnit] = useState("all");
   const [filterRegion, setFilterRegion] = useState("all");
   const [filterKotu, setFilterKotu] = useState("all");
 
@@ -170,6 +171,11 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
   const uniqueWorkItems = useMemo(() => {
     const names = new Set(allProgressEntries.map(e => e.workItem?.name).filter(Boolean) as string[]);
     return Array.from(names).sort();
+  }, [allProgressEntries]);
+
+  const uniqueUnits = useMemo(() => {
+    const units = new Set(allProgressEntries.map(e => e.workItem?.unit).filter(Boolean) as string[]);
+    return Array.from(units).sort();
   }, [allProgressEntries]);
 
   // Unique work items from man-hours entries
@@ -194,11 +200,12 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
       if (filterStartDate && e.entryDate < filterStartDate) return false;
       if (filterEndDate && e.entryDate > filterEndDate) return false;
       if (filterWorkItem !== "all" && e.workItem?.name !== filterWorkItem) return false;
+      if (filterUnit !== "all" && e.workItem?.unit !== filterUnit) return false;
       if (filterRegion !== "all" && parseNotes(e.notes).region !== filterRegion) return false;
       if (filterKotu !== "all" && (e as any).imalatKotu !== filterKotu) return false;
       return true;
     });
-  }, [allProgressEntries, filterStartDate, filterEndDate, filterWorkItem, filterRegion, filterKotu]);
+  }, [allProgressEntries, filterStartDate, filterEndDate, filterWorkItem, filterUnit, filterRegion, filterKotu]);
 
   // Apply filters to man-hours entries
   const manHoursEntries = useMemo(() => {
@@ -683,7 +690,7 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
               <Filter className="h-4 w-4" />
               Filtreler
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               {/* Start Date */}
               <div className="space-y-1">
                 <Label className="text-xs">Başlangıç Tarihi</Label>
@@ -751,6 +758,21 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
                   </SelectContent>
                 </Select>
               </div>
+              {/* Birim */}
+              <div className="space-y-1">
+                <Label className="text-xs">Birim</Label>
+                <Select value={filterUnit} onValueChange={(v) => { setFilterUnit(v); setProgressPage(1); }}>
+                  <SelectTrigger className="h-8 text-xs" data-testid="select-filter-unit">
+                    <SelectValue placeholder="Tümü" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tümü</SelectItem>
+                    {uniqueUnits.map(u => (
+                      <SelectItem key={u} value={u}>{u}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               {/* İmalat Bölgesi */}
               <div className="space-y-1">
                 <Label className="text-xs">İmalat Bölgesi</Label>
@@ -782,12 +804,12 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
                 </Select>
               </div>
             </div>
-            {(filterStartDate || filterEndDate || filterWorkItem !== "all" || filterRegion !== "all" || filterKotu !== "all") && (
+            {(filterStartDate || filterEndDate || filterWorkItem !== "all" || filterUnit !== "all" || filterRegion !== "all" || filterKotu !== "all") && (
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-7 text-xs text-muted-foreground"
-                onClick={() => { setFilterStartDate(""); setFilterEndDate(""); setFilterWorkItem("all"); setFilterRegion("all"); setFilterKotu("all"); setProgressPage(1); }}
+                onClick={() => { setFilterStartDate(""); setFilterEndDate(""); setFilterWorkItem("all"); setFilterUnit("all"); setFilterRegion("all"); setFilterKotu("all"); setProgressPage(1); }}
                 data-testid="button-clear-filters"
               >
                 <X className="h-3 w-3 mr-1" />
