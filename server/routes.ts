@@ -8,6 +8,7 @@ import {
   insertDailyEntrySchema,
   insertMonthlyScheduleSchema,
   insertMonthlyWorkItemScheduleSchema,
+  insertDetailedMonthlyPlanSchema,
   insertProjectMemberSchema,
   insertProjectInvitationSchema,
 } from "@shared/schema";
@@ -413,6 +414,73 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Invalid work schedule data", errors: error.errors });
       }
       res.status(500).json({ message: "Failed to create work schedule" });
+    }
+  });
+
+  // Detailed Monthly Plan endpoints
+  app.get("/api/projects/:id/detailed-monthly-plan", isAuthenticated, async (req: any, res) => {
+    try {
+      const projectId = req.params.id;
+      const userId = req.user.id.toString();
+      if (!(await storage.canAccessProject(projectId, userId))) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      const year = req.query.year ? parseInt(req.query.year as string) : undefined;
+      const month = req.query.month ? parseInt(req.query.month as string) : undefined;
+      const plans = await storage.getDetailedMonthlyPlan(projectId, year, month);
+      res.json(plans);
+    } catch (error) {
+      console.error("Error fetching detailed monthly plan:", error);
+      res.status(500).json({ message: "Failed to fetch detailed monthly plan" });
+    }
+  });
+
+  app.post("/api/projects/:id/detailed-monthly-plan/bulk", isAuthenticated, async (req: any, res) => {
+    try {
+      const projectId = req.params.id;
+      const userId = req.user.id.toString();
+      if (!(await storage.canAccessProject(projectId, userId))) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      const { items, year, month } = req.body;
+      if (!items || items.length === 0) {
+        return res.status(400).json({ message: "En az bir kayıt gerekli. Boş veri gönderilemez." });
+      }
+      if (!year || !month) {
+        return res.status(400).json({ message: "Yıl ve ay bilgisi gerekli." });
+      }
+      await storage.deleteDetailedMonthlyPlan(projectId, year, month);
+      const parsedItems = items.map((item: any) =>
+        insertDetailedMonthlyPlanSchema.parse({ ...item, projectId })
+      );
+      const plans = await storage.createDetailedMonthlyPlans(parsedItems);
+      res.status(201).json({ count: plans.length, plans });
+    } catch (error) {
+      console.error("Error bulk creating detailed monthly plan:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Geçersiz veri formatı", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create detailed monthly plan" });
+    }
+  });
+
+  app.get("/api/projects/:id/detailed-monthly-plan/report", isAuthenticated, async (req: any, res) => {
+    try {
+      const projectId = req.params.id;
+      const userId = req.user.id.toString();
+      if (!(await storage.canAccessProject(projectId, userId))) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      const year = parseInt(req.query.year as string);
+      const month = parseInt(req.query.month as string);
+      if (!year || !month) {
+        return res.status(400).json({ message: "Yıl ve ay parametresi gerekli." });
+      }
+      const report = await storage.getDetailedMonthlyPlanReport(projectId, year, month);
+      res.json(report);
+    } catch (error) {
+      console.error("Error fetching detailed monthly plan report:", error);
+      res.status(500).json({ message: "Failed to fetch report" });
     }
   });
 

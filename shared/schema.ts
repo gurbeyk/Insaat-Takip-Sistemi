@@ -242,6 +242,28 @@ export const insertMonthlyWorkItemScheduleSchema = createInsertSchema(monthlyWor
   createdAt: true,
 });
 
+// Detailed Monthly Plan (Detaylı Aylık İş Programı)
+export const detailedMonthlyPlan = pgTable("detailed_monthly_plan", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  year: integer("year").notNull(),
+  month: integer("month").notNull(),
+  budgetCodeParent: varchar("budget_code_parent"),
+  category: varchar("category"),
+  budgetCode: varchar("budget_code").notNull(),
+  workItemName: varchar("work_item_name").notNull(),
+  unit: varchar("unit").notNull(),
+  plannedQuantity: real("planned_quantity").notNull().default(0),
+  region: varchar("region"),
+  imalatKotu: varchar("imalat_kotu"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertDetailedMonthlyPlanSchema = createInsertSchema(detailedMonthlyPlan).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertProjectMemberSchema = createInsertSchema(projectMembers).omit({
   id: true,
   createdAt: true,
@@ -271,6 +293,9 @@ export type InsertMonthlySchedule = z.infer<typeof insertMonthlyScheduleSchema>;
 
 export type MonthlyWorkItemSchedule = typeof monthlyWorkItemSchedule.$inferSelect;
 export type InsertMonthlyWorkItemSchedule = z.infer<typeof insertMonthlyWorkItemScheduleSchema>;
+
+export type DetailedMonthlyPlan = typeof detailedMonthlyPlan.$inferSelect;
+export type InsertDetailedMonthlyPlan = z.infer<typeof insertDetailedMonthlyPlanSchema>;
 
 export type ProjectMember = typeof projectMembers.$inferSelect;
 export type InsertProjectMember = z.infer<typeof insertProjectMemberSchema>;

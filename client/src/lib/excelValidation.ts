@@ -853,3 +853,150 @@ export function validateWorkSchedule(
 
   return { validItems, errors, warnings, monthlyManHours };
 }
+
+// Detailed Monthly Plan (Detaylı Aylık İş Programı) validation
+export interface DetailedMonthlyPlanRow {
+  year: number;
+  month: number;
+  budgetCodeParent: string;
+  category: string;
+  budgetCode: string;
+  workItemName: string;
+  unit: string;
+  plannedQuantity: number;
+  region: string;
+  imalatKotu: string;
+}
+
+export interface DetailedMonthlyPlanValidationResult extends ValidationResult<DetailedMonthlyPlanRow> {
+  year?: number;
+  month?: number;
+}
+
+// Parse Turkish month-year string like "Haziran-2026" → { month: 6, year: 2026 }
+function parseTurkishMonthYear(value: string): { year: number; month: number } | null {
+  if (!value) return null;
+  const str = String(value).trim().toLocaleLowerCase('tr-TR');
+  // Try "MonthName-YYYY" or "MonthName YYYY"
+  const match = str.match(/^([a-zA-ZçğışöüÇĞİŞÖÜa-z]+)[-\s](\d{4})$/);
+  if (match) {
+    const monthNum = monthNames[match[1]];
+    const year = parseInt(match[2]);
+    if (monthNum && year > 2000 && year < 2100) {
+      return { month: monthNum, year };
+    }
+  }
+  return null;
+}
+
+export function validateDetailedMonthlyPlan(data: unknown[][]): DetailedMonthlyPlanValidationResult {
+  const validItems: DetailedMonthlyPlanRow[] = [];
+  const errors: ValidationError[] = [];
+  const warnings: string[] = [];
+
+  if (!data || data.length < 2) {
+    errors.push({ row: 0, field: "file", value: null, message: "Dosya boş veya geçersiz format." });
+    return { validItems, errors, warnings };
+  }
+
+  // Skip header row (row 0), start from row 1
+  let detectedYear: number | undefined;
+  let detectedMonth: number | undefined;
+  let skippedRows = 0;
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (!row || row.length === 0) continue;
+
+    // Column indices: [0]=Dönem, [1]=Bütçe Kodu Üst Öge, [2]=İmalat Ayrımı,
+    //                 [3]=Bütçe Kodu, [4]=İmalat Kalemi, [5]=Birim,
+    //                 [6]=Miktar, [7]=İmalat Bölgesi, [8]=İmalat Kotu
+    const donemRaw = row[0];
+    const budgetCodeParent = row[1] != null ? String(row[1]).trim() : "";
+    const category = row[2] != null ? String(row[2]).trim() : "";
+    const budgetCodeRaw = row[3];
+    const workItemName = row[4] != null ? String(row[4]).trim() : "";
+    const unit = row[5] != null ? String(row[5]).trim() : "";
+    const miktarRaw = row[6];
+    const region = row[7] != null ? String(row[7]).trim() : "";
+    const imalatKotu = row[8] != null ? String(row[8]).trim() : "";
+
+    // Skip rows without required fields
+    if (!workItemName || !unit) {
+      skippedRows++;
+      continue;
+    }
+
+    // Skip non-m3 units (only concrete items)
+    if (!unit.toLowerCase().startsWith("m3")) {
+      continue;
+    }
+
+    // Parse period (Dönem)
+    let year = detectedYear;
+    let month = detectedMonth;
+    if (donemRaw != null && String(donemRaw).trim() !== "") {
+      const parsed = parseTurkishMonthYear(String(donemRaw));
+      if (parsed) {
+        year = parsed.year;
+        month = parsed.month;
+        if (!detectedYear) {
+          detectedYear = year;
+          detectedMonth = month;
+        }
+      }
+    }
+
+    if (!year || !month) {
+      skippedRows++;
+      continue;
+    }
+
+    // Parse budget code
+    const budgetCode = budgetCodeRaw != null ? String(budgetCodeRaw).trim() : "";
+    if (!budgetCode) {
+      skippedRows++;
+      continue;
+    }
+
+    // Parse quantity
+    let plannedQuantity = 0;
+    if (miktarRaw != null) {
+      if (typeof miktarRaw === "number") {
+        plannedQuantity = miktarRaw;
+      } else {
+        const numStr = String(miktarRaw).replace(/\s/g, "").replace(",", ".");
+        plannedQuantity = parseFloat(numStr) || 0;
+      }
+    }
+
+    if (plannedQuantity <= 0) {
+      continue;
+    }
+
+    validItems.push({
+      year,
+      month,
+      budgetCodeParent,
+      category,
+      budgetCode,
+      workItemName,
+      unit,
+      plannedQuantity,
+      region,
+      imalatKotu,
+    });
+  }
+
+  if (skippedRows > 0) {
+    warnings.push(`${skippedRows} satır atlandı (eksik alan veya dönem formatı tanınmadı).`);
+  }
+
+  if (validItems.length === 0 && errors.length === 0) {
+    warnings.push("Geçerli m3 birimli imalat verisi bulunamadı. Dosyada yalnızca m3 birimli satırlar aktarılır.");
+  } else {
+    warnings.push(`${validItems.length} satır geçerli (yalnızca m3 birimli imalatlar).`);
+  }
+
+  return { validItems, errors, warnings, year: detectedYear, month: detectedMonth };
+}

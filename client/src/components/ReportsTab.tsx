@@ -97,6 +97,8 @@ interface ReportsTabProps {
   project: Project;
 }
 
+const TURKISH_MONTHS_RT = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
+
 export function ReportsTab({ project }: ReportsTabProps) {
   const [reportType, setReportType] = useState("daily");
   const [startDate, setStartDate] = useState("");
@@ -104,6 +106,13 @@ export function ReportsTab({ project }: ReportsTabProps) {
   const [isExporting, setIsExporting] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+
+  // Detailed Monthly Plan report state
+  const now = new Date();
+  const [detailYear, setDetailYear] = useState(now.getFullYear());
+  const [detailMonth, setDetailMonth] = useState(now.getMonth() + 1);
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [expandedRegions, setExpandedRegions] = useState<Set<string>>(new Set());
 
   const queryParams = new URLSearchParams();
   if (startDate) queryParams.set("startDate", startDate);
@@ -119,6 +128,81 @@ export function ReportsTab({ project }: ReportsTabProps) {
       return res.json();
     },
   });
+
+  interface DetailedPlanReportRow {
+    id: string;
+    workItemName: string;
+    budgetCode: string;
+    budgetCodeParent: string;
+    category: string;
+    unit: string;
+    region: string;
+    imalatKotu: string;
+    plannedQuantity: number;
+    actualQuantity: number;
+    remainingQuantity: number;
+    progressPercent: number;
+  }
+
+  const { data: detailedPlanReport, isLoading: detailLoading } = useQuery<DetailedPlanReportRow[]>({
+    queryKey: ["/api/projects", project.id, "detailed-monthly-plan", "report", detailYear, detailMonth],
+    queryFn: async () => {
+      const url = `/api/projects/${project.id}/detailed-monthly-plan/report?year=${detailYear}&month=${detailMonth}`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch detailed plan report");
+      return res.json();
+    },
+  });
+
+  // Group report rows: İmalat Kalemi → İmalat Bölgesi → İmalat Kotu
+  interface RegionGroup {
+    region: string;
+    rows: DetailedPlanReportRow[];
+    totalPlanned: number;
+    totalActual: number;
+    totalRemaining: number;
+    progress: number;
+  }
+  interface WorkItemGroup {
+    workItemName: string;
+    budgetCode: string;
+    unit: string;
+    regions: RegionGroup[];
+    totalPlanned: number;
+    totalActual: number;
+    totalRemaining: number;
+    progress: number;
+  }
+
+  const groupedDetailReport: WorkItemGroup[] = (() => {
+    if (!detailedPlanReport || detailedPlanReport.length === 0) return [];
+    const byItem = new Map<string, DetailedPlanReportRow[]>();
+    for (const row of detailedPlanReport) {
+      const key = row.budgetCode + "|" + row.workItemName;
+      if (!byItem.has(key)) byItem.set(key, []);
+      byItem.get(key)!.push(row);
+    }
+    return Array.from(byItem.entries()).map(([, rows]) => {
+      const byRegion = new Map<string, DetailedPlanReportRow[]>();
+      for (const row of rows) {
+        const rkey = row.region || "(Bölge yok)";
+        if (!byRegion.has(rkey)) byRegion.set(rkey, []);
+        byRegion.get(rkey)!.push(row);
+      }
+      const regions: RegionGroup[] = Array.from(byRegion.entries()).map(([region, rrows]) => {
+        const totalPlanned = rrows.reduce((s, r) => s + r.plannedQuantity, 0);
+        const totalActual = rrows.reduce((s, r) => s + r.actualQuantity, 0);
+        const totalRemaining = rrows.reduce((s, r) => s + r.remainingQuantity, 0);
+        const progress = totalPlanned > 0 ? Math.min(100, (totalActual / totalPlanned) * 100) : 0;
+        return { region, rows: rrows, totalPlanned, totalActual, totalRemaining, progress };
+      });
+      const totalPlanned = rows.reduce((s, r) => s + r.plannedQuantity, 0);
+      const totalActual = rows.reduce((s, r) => s + r.actualQuantity, 0);
+      const totalRemaining = rows.reduce((s, r) => s + r.remainingQuantity, 0);
+      const progress = totalPlanned > 0 ? Math.min(100, (totalActual / totalPlanned) * 100) : 0;
+      return { workItemName: rows[0].workItemName, budgetCode: rows[0].budgetCode, unit: rows[0].unit, regions, totalPlanned, totalActual, totalRemaining, progress };
+    });
+  })();
 
   const formatTurkishDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -1045,6 +1129,186 @@ export function ReportsTab({ project }: ReportsTabProps) {
                 ) : (
                   <div className="h-[380px] flex items-center justify-center text-muted-foreground">
                     Henüz veri bulunmuyor
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Detailed Monthly Plan Report */}
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Building2 className="h-5 w-5" />
+                  Detaylı Aylık İmalat Performansı
+                </CardTitle>
+                <CardDescription>
+                  İmalat Kalemi → İmalat Bölgesi → İmalat Kotu bazında planlanan / gerçekleşen / kalan / ilerleme
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Month/Year selector */}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium">Ay:</label>
+                    <select
+                      className="border rounded px-2 py-1 text-sm bg-background"
+                      value={detailMonth}
+                      onChange={(e) => setDetailMonth(Number(e.target.value))}
+                    >
+                      {TURKISH_MONTHS_RT.map((name, i) => (
+                        <option key={i + 1} value={i + 1}>{name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium">Yıl:</label>
+                    <select
+                      className="border rounded px-2 py-1 text-sm bg-background"
+                      value={detailYear}
+                      onChange={(e) => setDetailYear(Number(e.target.value))}
+                    >
+                      {[2024, 2025, 2026, 2027, 2028].map((y) => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <Badge variant="outline" className="text-sm">
+                    {TURKISH_MONTHS_RT[detailMonth - 1]} {detailYear}
+                  </Badge>
+                </div>
+
+                {detailLoading ? (
+                  <div className="space-y-2">
+                    {[1,2,3].map(i => <div key={i} className="h-12 bg-muted animate-pulse rounded" />)}
+                  </div>
+                ) : groupedDetailReport.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
+                    <Building2 className="h-8 w-8 opacity-30" />
+                    <p className="text-sm">Bu ay için detaylı iş programı verisi bulunamadı.</p>
+                    <p className="text-xs">Ayarlar → Detaylı Aylık İş Programı bölümünden Excel yükleyin.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {/* Grand total row */}
+                    {(() => {
+                      const gtPlanned = groupedDetailReport.reduce((s, g) => s + g.totalPlanned, 0);
+                      const gtActual = groupedDetailReport.reduce((s, g) => s + g.totalActual, 0);
+                      const gtRemaining = groupedDetailReport.reduce((s, g) => s + g.totalRemaining, 0);
+                      const gtProgress = gtPlanned > 0 ? Math.min(100, (gtActual / gtPlanned) * 100) : 0;
+                      return (
+                        <div className="flex items-center gap-4 p-3 bg-muted/50 rounded-lg border font-medium text-sm">
+                          <span className="flex-1">TOPLAM</span>
+                          <span className="w-28 text-right text-muted-foreground">Plan: {gtPlanned.toLocaleString("tr-TR", { maximumFractionDigits: 1 })} m³</span>
+                          <span className="w-28 text-right text-blue-600">Gerç: {gtActual.toLocaleString("tr-TR", { maximumFractionDigits: 1 })} m³</span>
+                          <span className="w-28 text-right text-orange-600">Kalan: {gtRemaining.toLocaleString("tr-TR", { maximumFractionDigits: 1 })} m³</span>
+                          <div className="flex items-center gap-2 w-32">
+                            <div className="flex-1 bg-muted rounded-full h-2">
+                              <div className={`h-2 rounded-full ${gtProgress >= 100 ? "bg-green-500" : gtProgress >= 70 ? "bg-blue-500" : "bg-orange-400"}`} style={{ width: `${gtProgress}%` }} />
+                            </div>
+                            <span className={`text-xs font-bold w-10 text-right ${gtProgress >= 100 ? "text-green-600" : gtProgress >= 70 ? "text-blue-600" : "text-orange-500"}`}>%{gtProgress.toFixed(0)}</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Work item groups */}
+                    {groupedDetailReport.map((wg) => {
+                      const wiKey = wg.budgetCode;
+                      const wiExpanded = expandedItems.has(wiKey);
+                      return (
+                        <div key={wiKey} className="border rounded-lg overflow-hidden">
+                          {/* Work item header */}
+                          <button
+                            className="w-full flex items-center gap-3 p-3 bg-card hover:bg-muted/40 transition-colors text-left"
+                            onClick={() => {
+                              setExpandedItems(prev => {
+                                const next = new Set(prev);
+                                if (next.has(wiKey)) next.delete(wiKey); else next.add(wiKey);
+                                return next;
+                              });
+                            }}
+                          >
+                            <span className={`text-xs transition-transform ${wiExpanded ? "rotate-90" : ""}`}>▶</span>
+                            <span className="font-semibold text-sm flex-1">{wg.workItemName}</span>
+                            <Badge variant="outline" className="text-xs">{wg.budgetCode}</Badge>
+                            <span className="text-xs text-muted-foreground w-24 text-right">Plan: {wg.totalPlanned.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
+                            <span className="text-xs text-blue-600 w-24 text-right">Gerç: {wg.totalActual.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
+                            <span className="text-xs text-orange-600 w-24 text-right">Kalan: {wg.totalRemaining.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
+                            <div className="flex items-center gap-2 w-28">
+                              <div className="flex-1 bg-muted rounded-full h-1.5">
+                                <div className={`h-1.5 rounded-full ${wg.progress >= 100 ? "bg-green-500" : wg.progress >= 70 ? "bg-blue-500" : "bg-orange-400"}`} style={{ width: `${wg.progress}%` }} />
+                              </div>
+                              <span className={`text-xs font-bold w-10 text-right ${wg.progress >= 100 ? "text-green-600" : wg.progress >= 70 ? "text-blue-600" : "text-orange-500"}`}>%{wg.progress.toFixed(0)}</span>
+                            </div>
+                          </button>
+
+                          {/* Region groups */}
+                          {wiExpanded && (
+                            <div className="border-t divide-y">
+                              {wg.regions.map((rg) => {
+                                const rgKey = wiKey + "|" + rg.region;
+                                const rgExpanded = expandedRegions.has(rgKey);
+                                return (
+                                  <div key={rg.region}>
+                                    {/* Region header */}
+                                    <button
+                                      className="w-full flex items-center gap-3 px-6 py-2.5 bg-muted/20 hover:bg-muted/40 transition-colors text-left"
+                                      onClick={() => {
+                                        setExpandedRegions(prev => {
+                                          const next = new Set(prev);
+                                          if (next.has(rgKey)) next.delete(rgKey); else next.add(rgKey);
+                                          return next;
+                                        });
+                                      }}
+                                    >
+                                      <span className={`text-xs transition-transform ${rgExpanded ? "rotate-90" : ""}`}>▶</span>
+                                      <span className="font-medium text-sm flex-1 text-muted-foreground">{rg.region || "(Bölge belirtilmemiş)"}</span>
+                                      <span className="text-xs text-muted-foreground w-24 text-right">{rg.totalPlanned.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
+                                      <span className="text-xs text-blue-600 w-24 text-right">{rg.totalActual.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
+                                      <span className="text-xs text-orange-600 w-24 text-right">{rg.totalRemaining.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
+                                      <div className="flex items-center gap-2 w-28">
+                                        <div className="flex-1 bg-muted rounded-full h-1.5">
+                                          <div className={`h-1.5 rounded-full ${rg.progress >= 100 ? "bg-green-500" : rg.progress >= 70 ? "bg-blue-500" : "bg-orange-400"}`} style={{ width: `${rg.progress}%` }} />
+                                        </div>
+                                        <span className={`text-xs w-10 text-right ${rg.progress >= 100 ? "text-green-600" : rg.progress >= 70 ? "text-blue-600" : "text-orange-500"}`}>%{rg.progress.toFixed(0)}</span>
+                                      </div>
+                                    </button>
+
+                                    {/* Imalat Kotu rows */}
+                                    {rgExpanded && (
+                                      <div className="bg-background">
+                                        {/* Table header */}
+                                        <div className="grid grid-cols-5 gap-2 px-10 py-1.5 text-xs font-medium text-muted-foreground border-b bg-muted/10">
+                                          <span>İmalat Kotu</span>
+                                          <span className="text-right">Planlanan (m³)</span>
+                                          <span className="text-right">Gerçekleşen (m³)</span>
+                                          <span className="text-right">Kalan (m³)</span>
+                                          <span className="text-right">İlerleme</span>
+                                        </div>
+                                        {rg.rows.map((row) => (
+                                          <div key={row.id} className="grid grid-cols-5 gap-2 px-10 py-2 text-sm hover:bg-muted/10 border-b last:border-0">
+                                            <span className="font-mono text-xs text-muted-foreground">{row.imalatKotu || "—"}</span>
+                                            <span className="text-right">{row.plannedQuantity.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}</span>
+                                            <span className="text-right text-blue-600">{row.actualQuantity.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}</span>
+                                            <span className="text-right text-orange-600">{row.remainingQuantity.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}</span>
+                                            <div className="flex items-center gap-2 justify-end">
+                                              <div className="w-16 bg-muted rounded-full h-1.5">
+                                                <div className={`h-1.5 rounded-full ${row.progressPercent >= 100 ? "bg-green-500" : row.progressPercent >= 70 ? "bg-blue-500" : "bg-orange-400"}`} style={{ width: `${row.progressPercent}%` }} />
+                                              </div>
+                                              <span className={`text-xs w-8 text-right ${row.progressPercent >= 100 ? "text-green-600" : row.progressPercent >= 70 ? "text-blue-600" : "text-orange-500"}`}>%{row.progressPercent.toFixed(0)}</span>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>

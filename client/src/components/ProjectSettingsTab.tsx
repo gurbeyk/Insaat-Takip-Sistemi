@@ -34,13 +34,16 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Loader2, Save, Trash2, Upload, FileSpreadsheet, CheckCircle2, AlertCircle } from "lucide-react";
+import { Loader2, Save, Trash2, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, CalendarDays } from "lucide-react";
 import { useLocation } from "wouter";
 import * as XLSX from "xlsx";
-import { validateWorkSchedule, formatValidationSummary } from "@/lib/excelValidation";
-import type { Project, MonthlyWorkItemSchedule } from "@shared/schema";
+import { validateWorkSchedule, validateDetailedMonthlyPlan, formatValidationSummary } from "@/lib/excelValidation";
+import type { Project, MonthlyWorkItemSchedule, DetailedMonthlyPlan } from "@shared/schema";
+
+const TURKISH_MONTHS = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
 
 const projectSettingsSchema = z.object({
   name: z.string().min(1, "Proje adı zorunludur"),
@@ -64,13 +67,35 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const detailedFileInputRef = useRef<HTMLInputElement>(null);
   const [workScheduleFile, setWorkScheduleFile] = useState<File | null>(null);
   const [uploadStatus, setUploadStatus] = useState<{ success: boolean; message: string } | null>(null);
+  const [detailedPlanFile, setDetailedPlanFile] = useState<File | null>(null);
+  const [detailedUploadStatus, setDetailedUploadStatus] = useState<{ success: boolean; message: string } | null>(null);
 
   // Fetch existing work schedule
   const { data: workSchedule } = useQuery<MonthlyWorkItemSchedule[]>({
     queryKey: [`/api/projects/${project.id}/work-schedule`],
   });
+
+  // Fetch existing detailed monthly plans (all months)
+  const { data: detailedPlans } = useQuery<DetailedMonthlyPlan[]>({
+    queryKey: [`/api/projects/${project.id}/detailed-monthly-plan`],
+  });
+
+  // Group detailed plans by month/year for summary display
+  const detailedPlanSummary = detailedPlans
+    ? Array.from(
+        detailedPlans.reduce((acc, p) => {
+          const key = `${p.year}-${String(p.month).padStart(2, "0")}`;
+          if (!acc.has(key)) acc.set(key, { year: p.year, month: p.month, count: 0 });
+          acc.get(key)!.count++;
+          return acc;
+        }, new Map<string, { year: number; month: number; count: number }>()),
+      )
+      .map(([, v]) => v)
+      .sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month)
+    : [];
 
   const form = useForm<ProjectSettingsFormValues>({
     resolver: zodResolver(projectSettingsSchema),
@@ -133,6 +158,62 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
 
   const onSubmit = (values: ProjectSettingsFormValues) => {
     updateProjectMutation.mutate(values);
+  };
+
+  // Detailed monthly plan upload mutation
+  const detailedPlanMutation = useMutation({
+    mutationFn: async (data: { items: any[]; year: number; month: number }) => {
+      return await apiRequest("POST", `/api/projects/${project.id}/detailed-monthly-plan/bulk`, data);
+    },
+    onSuccess: (data: any) => {
+      const count = data?.count || 0;
+      const message = `Detaylı aylık iş programı başarıyla yüklendi. ${count} kayıt kaydedildi.`;
+      setDetailedUploadStatus({ success: true, message });
+      setDetailedPlanFile(null);
+      toast({ title: "Yüklendi", description: message });
+      queryClient.invalidateQueries({ queryKey: [`/api/projects/${project.id}/detailed-monthly-plan`] });
+    },
+    onError: (error: Error) => {
+      const message = error.message || "Yüklenirken hata oluştu.";
+      setDetailedUploadStatus({ success: false, message });
+      toast({ title: "Hata", description: message, variant: "destructive" });
+    },
+  });
+
+  const handleDetailedPlanFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setDetailedPlanFile(file);
+    setDetailedUploadStatus(null);
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data, { type: "array" });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as unknown[][];
+      const result = validateDetailedMonthlyPlan(jsonData);
+      if (result.errors.length > 0) {
+        setDetailedUploadStatus({ success: false, message: result.errors.map(e => e.message).join("\n") });
+        return;
+      }
+      if (result.validItems.length === 0) {
+        setDetailedUploadStatus({ success: false, message: result.warnings.join("\n") || "Geçerli veri bulunamadı." });
+        return;
+      }
+      if (!result.year || !result.month) {
+        setDetailedUploadStatus({ success: false, message: "Dönem (ay/yıl) bilgisi okunamadı." });
+        return;
+      }
+      const summary = `${result.validItems.length} m³ satırı bulundu (${TURKISH_MONTHS[result.month - 1]} ${result.year}). Yükleniyor...`;
+      setDetailedUploadStatus({ success: true, message: summary });
+      detailedPlanMutation.mutate({
+        items: result.validItems,
+        year: result.year,
+        month: result.month,
+      });
+    } catch {
+      setDetailedUploadStatus({ success: false, message: "Excel dosyası okunamadı." });
+    }
   };
 
   // Work schedule upload mutation
@@ -497,6 +578,90 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
               )}
               <AlertDescription className="whitespace-pre-line">
                 {uploadStatus.message}
+              </AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Detailed Monthly Plan Upload Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <CalendarDays className="h-5 w-5" />
+            Detaylı Aylık İş Programı
+          </CardTitle>
+          <CardDescription>
+            Aylık beton imalat planını (m³) bölge, imalat kalemi ve imalat kotu detayında Excel'den içe aktarın
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Existing plan summary */}
+          {detailedPlanSummary.length > 0 && (
+            <Alert>
+              <CheckCircle2 className="h-4 w-4" />
+              <AlertDescription>
+                <span className="font-medium">Mevcut programlar: </span>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {detailedPlanSummary.map((s) => (
+                    <Badge key={`${s.year}-${s.month}`} variant="secondary">
+                      {TURKISH_MONTHS[s.month - 1]} {s.year} — {s.count} kayıt
+                    </Badge>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Aynı ay için yeni dosya yüklerseniz o ayın mevcut programı silinir.
+                </p>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Format info */}
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              Excel formatı: Dönem (Ay) · Bütçe Kodu Üst Öge · İmalat Ayrımı · Bütçe Kodu · İmalat Kalemi · Birim · Miktar · İmalat Bölgesi · İmalat Kotu
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Yalnızca <strong>m3</strong> birimli satırlar aktarılır. Her dosya tek bir aya ait olmalıdır.
+            </p>
+            <div className="flex items-center gap-2">
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                ref={detailedFileInputRef}
+                onChange={handleDetailedPlanFileChange}
+                className="hidden"
+                data-testid="input-detailed-plan-file"
+              />
+              <Button
+                variant="outline"
+                onClick={() => detailedFileInputRef.current?.click()}
+                disabled={detailedPlanMutation.isPending}
+                data-testid="button-upload-detailed-plan"
+              >
+                {detailedPlanMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4 mr-2" />
+                )}
+                Excel Dosyası Seç
+              </Button>
+              {detailedPlanFile && (
+                <span className="text-sm text-muted-foreground">{detailedPlanFile.name}</span>
+              )}
+            </div>
+          </div>
+
+          {/* Upload status */}
+          {detailedUploadStatus && (
+            <Alert variant={detailedUploadStatus.success ? "default" : "destructive"}>
+              {detailedUploadStatus.success ? (
+                <CheckCircle2 className="h-4 w-4" />
+              ) : (
+                <AlertCircle className="h-4 w-4" />
+              )}
+              <AlertDescription className="whitespace-pre-line">
+                {detailedUploadStatus.message}
               </AlertDescription>
             </Alert>
           )}

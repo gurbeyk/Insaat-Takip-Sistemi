@@ -5,6 +5,7 @@ import {
   dailyEntries,
   monthlySchedule,
   monthlyWorkItemSchedule,
+  detailedMonthlyPlan,
   projectMembers,
   projectInvitations,
   type User,
@@ -19,6 +20,8 @@ import {
   type InsertMonthlySchedule,
   type MonthlyWorkItemSchedule,
   type InsertMonthlyWorkItemSchedule,
+  type DetailedMonthlyPlan,
+  type InsertDetailedMonthlyPlan,
   type ProjectMember,
   type InsertProjectMember,
   type ProjectInvitation,
@@ -64,6 +67,11 @@ export interface IStorage {
   getMonthlyWorkItemSchedule(projectId: string): Promise<MonthlyWorkItemSchedule[]>;
   createMonthlyWorkItemSchedules(schedules: InsertMonthlyWorkItemSchedule[]): Promise<MonthlyWorkItemSchedule[]>;
   deleteMonthlyWorkItemSchedule(projectId: string): Promise<void>;
+
+  getDetailedMonthlyPlan(projectId: string, year?: number, month?: number): Promise<DetailedMonthlyPlan[]>;
+  createDetailedMonthlyPlans(plans: InsertDetailedMonthlyPlan[]): Promise<DetailedMonthlyPlan[]>;
+  deleteDetailedMonthlyPlan(projectId: string, year: number, month: number): Promise<void>;
+  getDetailedMonthlyPlanReport(projectId: string, year: number, month: number): Promise<any[]>;
   
   getProjectMembers(projectId: string): Promise<ProjectMember[]>;
   getProjectMembersWithUsers(projectId: string): Promise<(ProjectMember & { user: User | null })[]>;
@@ -442,6 +450,71 @@ export class DatabaseStorage implements IStorage {
 
   async deleteProjectInvitation(id: string): Promise<void> {
     await db.delete(projectInvitations).where(eq(projectInvitations.id, id));
+  }
+
+  async getDetailedMonthlyPlan(projectId: string, year?: number, month?: number): Promise<DetailedMonthlyPlan[]> {
+    const conditions = [eq(detailedMonthlyPlan.projectId, projectId)];
+    if (year !== undefined) conditions.push(eq(detailedMonthlyPlan.year, year));
+    if (month !== undefined) conditions.push(eq(detailedMonthlyPlan.month, month));
+    return await db
+      .select()
+      .from(detailedMonthlyPlan)
+      .where(and(...conditions))
+      .orderBy(detailedMonthlyPlan.workItemName, detailedMonthlyPlan.region, detailedMonthlyPlan.imalatKotu);
+  }
+
+  async createDetailedMonthlyPlans(plans: InsertDetailedMonthlyPlan[]): Promise<DetailedMonthlyPlan[]> {
+    if (plans.length === 0) return [];
+    return await db.insert(detailedMonthlyPlan).values(plans).returning();
+  }
+
+  async deleteDetailedMonthlyPlan(projectId: string, year: number, month: number): Promise<void> {
+    await db
+      .delete(detailedMonthlyPlan)
+      .where(and(
+        eq(detailedMonthlyPlan.projectId, projectId),
+        eq(detailedMonthlyPlan.year, year),
+        eq(detailedMonthlyPlan.month, month),
+      ));
+  }
+
+  async getDetailedMonthlyPlanReport(projectId: string, year: number, month: number): Promise<any[]> {
+    const result = await db.execute(sql`
+      SELECT
+        dmp.id,
+        dmp.work_item_name AS "workItemName",
+        dmp.budget_code AS "budgetCode",
+        dmp.budget_code_parent AS "budgetCodeParent",
+        dmp.category,
+        dmp.unit,
+        dmp.region,
+        dmp.imalat_kotu AS "imalatKotu",
+        dmp.planned_quantity AS "plannedQuantity",
+        COALESCE(SUM(de.quantity), 0) AS "actualQuantity"
+      FROM detailed_monthly_plan dmp
+      LEFT JOIN work_items wi
+        ON wi.budget_code = dmp.budget_code
+        AND wi.project_id = dmp.project_id
+      LEFT JOIN daily_entries de
+        ON de.work_item_id = wi.id
+        AND (dmp.imalat_kotu IS NULL OR dmp.imalat_kotu = '' OR de.imalat_kotu = dmp.imalat_kotu)
+        AND EXTRACT(YEAR FROM de.entry_date::date) = dmp.year
+        AND EXTRACT(MONTH FROM de.entry_date::date) = dmp.month
+      WHERE dmp.project_id = ${projectId}
+        AND dmp.year = ${year}
+        AND dmp.month = ${month}
+      GROUP BY dmp.id, dmp.work_item_name, dmp.budget_code, dmp.budget_code_parent, dmp.category, dmp.unit, dmp.region, dmp.imalat_kotu, dmp.planned_quantity
+      ORDER BY dmp.work_item_name, dmp.region, dmp.imalat_kotu
+    `);
+    return (result.rows as any[]).map((row) => ({
+      ...row,
+      plannedQuantity: Number(row.plannedQuantity) || 0,
+      actualQuantity: Number(row.actualQuantity) || 0,
+      remainingQuantity: Math.max(0, (Number(row.plannedQuantity) || 0) - (Number(row.actualQuantity) || 0)),
+      progressPercent: (Number(row.plannedQuantity) || 0) > 0
+        ? Math.min(100, ((Number(row.actualQuantity) || 0) / (Number(row.plannedQuantity) || 0)) * 100)
+        : 0,
+    }));
   }
 }
 
