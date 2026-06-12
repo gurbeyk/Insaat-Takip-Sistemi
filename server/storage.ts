@@ -514,7 +514,8 @@ export class DatabaseStorage implements IStorage {
           wi.unit,
           trim(substring(de.notes from 'Bölge:\s*([^,]+)')) AS region,
           de.imalat_kotu,
-          SUM(de.quantity) AS actual_quantity
+          SUM(de.quantity) AS actual_quantity,
+          array_agg(DISTINCT de.entry_date::date ORDER BY de.entry_date::date) AS actual_dates
         FROM daily_entries de
         JOIN work_items wi ON wi.id = de.work_item_id
         WHERE wi.project_id = ${projectId}
@@ -533,7 +534,10 @@ export class DatabaseStorage implements IStorage {
         dmp.region,
         dmp.imalat_kotu AS "imalatKotu",
         dmp.planned_quantity AS "plannedQuantity",
-        COALESCE(SUM(de.quantity), 0) AS "actualQuantity"
+        dmp.dokum_tarihi_1 AS "dokumTarihi1",
+        dmp.dokum_tarihi_2 AS "dokumTarihi2",
+        COALESCE(SUM(de.quantity), 0) AS "actualQuantity",
+        array_agg(DISTINCT de.entry_date::date ORDER BY de.entry_date::date) FILTER (WHERE de.entry_date IS NOT NULL) AS "actualDates"
       FROM detailed_monthly_plan dmp
       LEFT JOIN work_items wi
         ON wi.budget_code = dmp.budget_code
@@ -548,7 +552,7 @@ export class DatabaseStorage implements IStorage {
         AND dmp.year = ${year}
         AND dmp.month = ${month}
         AND lower(trim(dmp.unit)) = 'm3'
-      GROUP BY dmp.id, dmp.work_item_name, dmp.budget_code, dmp.budget_code_parent, dmp.category, dmp.unit, dmp.region, dmp.imalat_kotu, dmp.planned_quantity
+      GROUP BY dmp.id, dmp.work_item_name, dmp.budget_code, dmp.budget_code_parent, dmp.category, dmp.unit, dmp.region, dmp.imalat_kotu, dmp.planned_quantity, dmp.dokum_tarihi_1, dmp.dokum_tarihi_2
 
       UNION ALL
 
@@ -562,7 +566,10 @@ export class DatabaseStorage implements IStorage {
         ag.region,
         ag.imalat_kotu AS "imalatKotu",
         0 AS "plannedQuantity",
-        ag.actual_quantity AS "actualQuantity"
+        NULL AS "dokumTarihi1",
+        NULL AS "dokumTarihi2",
+        ag.actual_quantity AS "actualQuantity",
+        ag.actual_dates AS "actualDates"
       FROM actual_groups ag
       WHERE ag.actual_quantity <> 0
         AND NOT EXISTS (
@@ -577,15 +584,59 @@ export class DatabaseStorage implements IStorage {
 
       ORDER BY "workItemName", region, "imalatKotu"
     `);
-    return (result.rows as any[]).map((row) => ({
-      ...row,
-      plannedQuantity: Number(row.plannedQuantity) || 0,
-      actualQuantity: Number(row.actualQuantity) || 0,
-      remainingQuantity: Math.max(0, (Number(row.plannedQuantity) || 0) - (Number(row.actualQuantity) || 0)),
-      progressPercent: (Number(row.plannedQuantity) || 0) > 0
-        ? Math.min(100, ((Number(row.actualQuantity) || 0) / (Number(row.plannedQuantity) || 0)) * 100)
-        : 0,
-    }));
+    const toDateOnly = (value: unknown): string | null => {
+      if (!value) return null;
+      if (value instanceof Date) {
+        const y = value.getFullYear();
+        const m = String(value.getMonth() + 1).padStart(2, "0");
+        const d = String(value.getDate()).padStart(2, "0");
+        return `${y}-${m}-${d}`;
+      }
+      return String(value).split("T")[0];
+    };
+
+    const diffDays = (planned: string | null, actual: string | null): number | null => {
+      if (!planned || !actual) return null;
+      const plannedDate = new Date(planned + "T00:00:00Z");
+      const actualDate = new Date(actual + "T00:00:00Z");
+      return Math.round((actualDate.getTime() - plannedDate.getTime()) / (1000 * 60 * 60 * 24));
+    };
+
+    return (result.rows as any[]).map((row) => {
+      const actualDates: string[] = Array.isArray(row.actualDates)
+        ? row.actualDates.map((d: unknown) => toDateOnly(d)).filter((d: string | null): d is string => !!d)
+        : [];
+      const dokumTarihi1 = toDateOnly(row.dokumTarihi1);
+      const dokumTarihi2 = toDateOnly(row.dokumTarihi2);
+
+      // If only the 2nd pour date is planned (1st pour happened in a previous month),
+      // the earliest actual date belongs to pour 2, not pour 1.
+      let gerceklesenDokum1: string | null;
+      let gerceklesenDokum2: string | null;
+      if (!dokumTarihi1 && dokumTarihi2) {
+        gerceklesenDokum1 = null;
+        gerceklesenDokum2 = actualDates[0] ?? null;
+      } else {
+        gerceklesenDokum1 = actualDates[0] ?? null;
+        gerceklesenDokum2 = actualDates[1] ?? null;
+      }
+
+      return {
+        ...row,
+        plannedQuantity: Number(row.plannedQuantity) || 0,
+        actualQuantity: Number(row.actualQuantity) || 0,
+        remainingQuantity: Math.max(0, (Number(row.plannedQuantity) || 0) - (Number(row.actualQuantity) || 0)),
+        progressPercent: (Number(row.plannedQuantity) || 0) > 0
+          ? Math.min(100, ((Number(row.actualQuantity) || 0) / (Number(row.plannedQuantity) || 0)) * 100)
+          : 0,
+        dokumTarihi1,
+        dokumTarihi2,
+        gerceklesenDokum1,
+        gerceklesenDokum2,
+        dokum1DelayDays: diffDays(dokumTarihi1, gerceklesenDokum1),
+        dokum2DelayDays: diffDays(dokumTarihi2, gerceklesenDokum2),
+      };
+    });
   }
 }
 

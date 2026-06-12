@@ -515,6 +515,46 @@ function parseDateSafe(
   return null;
 }
 
+// Parse an optional date cell (e.g. "Döküm Tarihi-1/2"). Returns undefined if empty,
+// without raising a validation error — empty values are simply ignored.
+function parseOptionalDate(value: unknown): string | undefined {
+  if (value === null || value === undefined || String(value).trim() === "") {
+    return undefined;
+  }
+
+  if (typeof value === "number") {
+    const excelDate = new Date((value - 25569) * 86400 * 1000);
+    if (!isNaN(excelDate.getTime())) {
+      return excelDate.toISOString().split("T")[0];
+    }
+  }
+
+  const dateStr = String(value).trim();
+
+  const isoMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+  }
+
+  const trMatch = dateStr.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+  if (trMatch) {
+    const day = trMatch[1].padStart(2, "0");
+    const month = trMatch[2].padStart(2, "0");
+    const year = trMatch[3];
+    return `${year}-${month}-${day}`;
+  }
+
+  const trMatch2 = dateStr.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2})$/);
+  if (trMatch2) {
+    const day = trMatch2[1].padStart(2, "0");
+    const month = trMatch2[2].padStart(2, "0");
+    const year = "20" + trMatch2[3];
+    return `${year}-${month}-${day}`;
+  }
+
+  return undefined;
+}
+
 export function formatValidationSummary(
   result: ValidationResult<unknown>,
   totalRows: number
@@ -964,6 +1004,8 @@ export interface DetailedMonthlyPlanRow {
   plannedQuantity: number;
   region: string;
   imalatKotu: string;
+  dokumTarihi1?: string;
+  dokumTarihi2?: string;
 }
 
 export interface DetailedMonthlyPlanValidationResult extends ValidationResult<DetailedMonthlyPlanRow> {
@@ -1008,7 +1050,8 @@ export function validateDetailedMonthlyPlan(data: unknown[][]): DetailedMonthlyP
 
     // Column indices: [0]=Dönem, [1]=Bütçe Kodu Üst Öge, [2]=İmalat Ayrımı,
     //                 [3]=Bütçe Kodu, [4]=İmalat Kalemi, [5]=Birim,
-    //                 [6]=Miktar, [7]=İmalat Bölgesi, [8]=İmalat Kotu
+    //                 [6]=Miktar, [7]=İmalat Bölgesi, [8]=İmalat Kotu,
+    //                 [9]=Döküm Tarihi-1, [10]=Döküm Tarihi-2
     const donemRaw = row[0];
     const budgetCodeParent = row[1] != null ? String(row[1]).trim() : "";
     const category = row[2] != null ? String(row[2]).trim() : "";
@@ -1018,6 +1061,8 @@ export function validateDetailedMonthlyPlan(data: unknown[][]): DetailedMonthlyP
     const miktarRaw = row[6];
     const region = row[7] != null ? String(row[7]).trim() : "";
     const imalatKotu = row[8] != null ? String(row[8]).trim() : "";
+    const dokumTarihi1 = parseOptionalDate(row[9]);
+    const dokumTarihi2 = parseOptionalDate(row[10]);
 
     // Skip rows without required fields
     if (!workItemName || !unit) {
@@ -1083,6 +1128,8 @@ export function validateDetailedMonthlyPlan(data: unknown[][]): DetailedMonthlyP
       plannedQuantity,
       region,
       imalatKotu,
+      dokumTarihi1,
+      dokumTarihi2,
     });
   }
 

@@ -92,6 +92,12 @@ interface DetailedPlanReportRow {
   actualQuantity: number;
   remainingQuantity: number;
   progressPercent: number;
+  dokumTarihi1: string | null;
+  dokumTarihi2: string | null;
+  gerceklesenDokum1: string | null;
+  gerceklesenDokum2: string | null;
+  dokum1DelayDays: number | null;
+  dokum2DelayDays: number | null;
 }
 interface RegionGroupPD {
   region: string;
@@ -110,6 +116,34 @@ interface WorkItemGroupPD {
   totalActual: number;
   totalRemaining: number;
   progress: number;
+}
+
+function formatDokumDate(dateStr: string | null): string {
+  if (!dateStr) return "—";
+  const [, month, day] = dateStr.split("-");
+  return `${day}.${month}`;
+}
+
+function DokumTarihiCell({ planned, actual, delayDays }: { planned: string | null; actual: string | null; delayDays: number | null }) {
+  if (!planned) {
+    return <span className="text-xs text-muted-foreground w-24 text-center">—</span>;
+  }
+
+  return (
+    <div className="flex flex-col items-center w-24 text-xs leading-tight">
+      <span className="text-muted-foreground">{formatDokumDate(planned)}</span>
+      {actual ? (
+        <span className={delayDays && delayDays > 0 ? "text-red-600 font-medium" : delayDays && delayDays < 0 ? "text-green-600 font-medium" : "text-muted-foreground"}>
+          {formatDokumDate(actual)}
+          {delayDays !== null && delayDays !== 0 && (
+            <> ({delayDays > 0 ? "-" : "+"}{Math.abs(delayDays)})</>
+          )}
+        </span>
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      )}
+    </div>
+  );
 }
 
 function DetailedMonthlyPlanSection({ projectId }: { projectId: string }) {
@@ -145,6 +179,7 @@ function DetailedMonthlyPlanSection({ projectId }: { projectId: string }) {
         byRegion.get(rkey)!.push(row);
       }
       const regions: RegionGroupPD[] = Array.from(byRegion.entries()).map(([region, rrows]) => {
+        rrows = [...rrows].sort((a, b) => (parseFloat(a.imalatKotu) || 0) - (parseFloat(b.imalatKotu) || 0));
         const totalPlanned = rrows.reduce((s, r) => s + r.plannedQuantity, 0);
         const totalActual = rrows.reduce((s, r) => s + r.actualQuantity, 0);
         const totalRemaining = rrows.reduce((s, r) => s + r.remainingQuantity, 0);
@@ -217,6 +252,8 @@ function DetailedMonthlyPlanSection({ projectId }: { projectId: string }) {
             {/* Column header row — always visible above TOPLAM */}
             <div className="flex items-center gap-4 px-3 py-1 text-xs font-medium text-muted-foreground">
               <span className="flex-1">İmalat Kalemi</span>
+              <span className="w-24 text-center">Döküm 1</span>
+              <span className="w-24 text-center">Döküm 2</span>
               <span className="w-28 text-right">Plan (m³)</span>
               <span className="w-28 text-right">Gerçekleşen (m³)</span>
               <span className="w-28 text-right">Kalan (m³)</span>
@@ -232,6 +269,8 @@ function DetailedMonthlyPlanSection({ projectId }: { projectId: string }) {
               return (
                 <div className="flex items-center gap-4 pl-3 pr-3 py-3 bg-muted/50 rounded-lg border font-medium text-sm">
                   <span className="flex-1">TOPLAM</span>
+                  <span className="w-24" />
+                  <span className="w-24" />
                   <span className="w-28 text-right text-muted-foreground">{gtPlanned.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
                   <span className="w-28 text-right text-blue-600">{gtActual.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
                   <span className="w-28 text-right text-orange-600">{gtRemaining.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
@@ -264,6 +303,8 @@ function DetailedMonthlyPlanSection({ projectId }: { projectId: string }) {
                   >
                     <span className={`text-xs transition-transform ${wiExpanded ? "rotate-90" : ""}`}>▶</span>
                     <span className="font-semibold text-sm flex-1">{wg.workItemName}</span>
+                    <span className="w-24" />
+                    <span className="w-24" />
                     <span className="text-xs text-muted-foreground w-28 text-right">{wg.totalPlanned.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
                     <span className="text-xs text-blue-600 w-28 text-right">{wg.totalActual.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
                     <span className="text-xs text-orange-600 w-28 text-right">{wg.totalRemaining.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
@@ -302,6 +343,8 @@ function DetailedMonthlyPlanSection({ projectId }: { projectId: string }) {
                                 <span className={`text-xs transition-transform ${rgExpanded ? "rotate-90" : ""}`}>▶</span>
                               )}
                               <span className="font-medium text-sm flex-1 text-muted-foreground">{rg.region || "(Bölge belirtilmemiş)"}</span>
+                              <span className="w-24" />
+                              <span className="w-24" />
                               <span className="text-xs text-muted-foreground w-28 text-right">{rg.totalPlanned.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
                               <span className="text-xs text-blue-600 w-28 text-right">{rg.totalActual.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
                               <span className="text-xs text-orange-600 w-28 text-right">{rg.totalRemaining.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
@@ -319,6 +362,8 @@ function DetailedMonthlyPlanSection({ projectId }: { projectId: string }) {
                                 {rg.rows.map((row) => (
                                   <div key={row.id} className="flex items-center gap-4 pl-10 pr-3 py-2 text-sm hover:bg-muted/10 border-b last:border-0">
                                     <span className="font-mono text-xs text-muted-foreground flex-1">{row.imalatKotu || "—"}</span>
+                                    <DokumTarihiCell planned={row.dokumTarihi1} actual={row.gerceklesenDokum1} delayDays={row.dokum1DelayDays} />
+                                    <DokumTarihiCell planned={row.dokumTarihi2} actual={row.gerceklesenDokum2} delayDays={row.dokum2DelayDays} />
                                     <span className="w-28 text-right">{row.plannedQuantity.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}</span>
                                     <span className="w-28 text-right text-blue-600">{row.actualQuantity.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}</span>
                                     <span className="w-28 text-right text-orange-600">{row.remainingQuantity.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}</span>

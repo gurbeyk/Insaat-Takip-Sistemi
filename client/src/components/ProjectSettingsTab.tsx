@@ -693,10 +693,10 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
           {/* Format info */}
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground">
-              Excel formatı: Dönem (Ay) · Bütçe Kodu Üst Öge · İmalat Ayrımı · Bütçe Kodu · İmalat Kalemi · Birim · Miktar · İmalat Bölgesi · İmalat Kotu
+              Excel formatı: Dönem (Ay) · Bütçe Kodu Üst Öge · İmalat Ayrımı · Bütçe Kodu · İmalat Kalemi · Birim · Miktar · İmalat Bölgesi · İmalat Kotu · Döküm Tarihi-1 · Döküm Tarihi-2
             </p>
             <p className="text-xs text-muted-foreground">
-              Yalnızca <strong>m3</strong> birimli satırlar aktarılır. Her dosya tek bir aya ait olmalıdır.
+              Yalnızca <strong>m3</strong> birimli satırlar aktarılır. Her dosya tek bir aya ait olmalıdır. Döküm Tarihi-1/2 alanları opsiyoneldir, boş bırakılabilir.
             </p>
             <div className="flex items-center gap-2">
               <input

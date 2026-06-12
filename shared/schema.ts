@@ -281,6 +281,8 @@ export const detailedMonthlyPlan = pgTable("detailed_monthly_plan", {
   plannedQuantity: real("planned_quantity").notNull().default(0),
   region: varchar("region"),
   imalatKotu: varchar("imalat_kotu"),
+  dokumTarihi1: date("dokum_tarihi_1"),
+  dokumTarihi2: date("dokum_tarihi_2"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
