@@ -37,11 +37,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Loader2, Save, Trash2, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, CalendarDays } from "lucide-react";
+import { Loader2, Save, Trash2, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, CalendarDays, MapPin } from "lucide-react";
 import { useLocation } from "wouter";
 import * as XLSX from "xlsx";
-import { validateWorkSchedule, validateDetailedMonthlyPlan, formatValidationSummary } from "@/lib/excelValidation";
-import type { Project, MonthlyWorkItemSchedule, DetailedMonthlyPlan } from "@shared/schema";
+import { validateWorkSchedule, validateDetailedMonthlyPlan, validateWorkRegions, formatValidationSummary } from "@/lib/excelValidation";
+import type { Project, MonthlyWorkItemSchedule, DetailedMonthlyPlan, WorkRegion } from "@shared/schema";
 
 const TURKISH_MONTHS = ["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
 
@@ -72,6 +72,9 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
   const [uploadStatus, setUploadStatus] = useState<{ success: boolean; message: string } | null>(null);
   const [detailedPlanFile, setDetailedPlanFile] = useState<File | null>(null);
   const [detailedUploadStatus, setDetailedUploadStatus] = useState<{ success: boolean; message: string } | null>(null);
+  const workRegionsFileInputRef = useRef<HTMLInputElement>(null);
+  const [workRegionsFile, setWorkRegionsFile] = useState<File | null>(null);
+  const [workRegionsUploadStatus, setWorkRegionsUploadStatus] = useState<{ success: boolean; message: string } | null>(null);
 
   // Fetch existing work schedule
   const { data: workSchedule } = useQuery<MonthlyWorkItemSchedule[]>({
@@ -81,6 +84,11 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
   // Fetch existing detailed monthly plans (all months)
   const { data: detailedPlans } = useQuery<DetailedMonthlyPlan[]>({
     queryKey: [`/api/projects/${project.id}/detailed-monthly-plan`],
+  });
+
+  // Fetch existing work regions (İmalat Bölgesi / İmalat Kotu tanımları)
+  const { data: workRegions } = useQuery<WorkRegion[]>({
+    queryKey: [`/api/projects/${project.id}/work-regions`],
   });
 
   // Group detailed plans by month/year for summary display
@@ -214,6 +222,72 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
     } catch {
       setDetailedUploadStatus({ success: false, message: "Excel dosyası okunamadı." });
     }
+  };
+
+  // Work regions (İmalat Bölgesi / İmalat Kotu) upload mutation
+  const workRegionsMutation = useMutation({
+    mutationFn: async (data: { items: { region: string; imalatKotu: string }[] }) => {
+      return await apiRequest("POST", `/api/projects/${project.id}/work-regions/bulk`, data);
+    },
+    onSuccess: (data: any) => {
+      const count = data?.count || 0;
+      const message = `İmalat Bölgesi / Kotu tanımları başarıyla yüklendi. ${count} kayıt kaydedildi.`;
+      setWorkRegionsUploadStatus({ success: true, message });
+      setWorkRegionsFile(null);
+      toast({ title: "Yüklendi", description: message });
+      queryClient.invalidateQueries({ queryKey: [`/api/projects/${project.id}/work-regions`] });
+    },
+    onError: (error: Error) => {
+      const message = error.message || "Yüklenirken hata oluştu.";
+      setWorkRegionsUploadStatus({ success: false, message });
+      toast({ title: "Hata", description: message, variant: "destructive" });
+    },
+  });
+
+  const handleWorkRegionsFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setWorkRegionsFile(file);
+    setWorkRegionsUploadStatus(null);
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data, { type: "array" });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet);
+      const result = validateWorkRegions(jsonData);
+
+      if (result.errors.length > 0) {
+        const errorMessages = result.errors.slice(0, 5).map(err => `Satır ${err.row}: ${err.message}`).join("\n");
+        setWorkRegionsUploadStatus({ success: false, message: `Doğrulama hataları:\n${errorMessages}` });
+        return;
+      }
+
+      if (result.validItems.length === 0) {
+        setWorkRegionsUploadStatus({ success: false, message: result.warnings.join("\n") || "Geçerli veri bulunamadı." });
+        return;
+      }
+
+      const summary = `${result.validItems.length} kombinasyon bulundu. Yükleniyor...`;
+      setWorkRegionsUploadStatus({ success: true, message: summary });
+      workRegionsMutation.mutate({ items: result.validItems });
+    } catch {
+      setWorkRegionsUploadStatus({ success: false, message: "Excel dosyası okunamadı." });
+    } finally {
+      e.target.value = "";
+    }
+  };
+
+  const downloadWorkRegionsTemplate = () => {
+    const templateData = [
+      { "İmalat Bölgesi": "A Blok", "İmalat Kotu": "+3.50" },
+      { "İmalat Bölgesi": "A Blok", "İmalat Kotu": "+6.50" },
+      { "İmalat Bölgesi": "B Blok", "İmalat Kotu": "+3.50" },
+    ];
+    const worksheet = XLSX.utils.json_to_sheet(templateData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Bölge-Kotu");
+    XLSX.writeFile(workbook, "imalat_bolgesi_kotu_sablonu.xlsx");
   };
 
   // Work schedule upload mutation
@@ -662,6 +736,97 @@ export function ProjectSettingsTab({ project }: ProjectSettingsTabProps) {
               )}
               <AlertDescription className="whitespace-pre-line">
                 {detailedUploadStatus.message}
+              </AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Work Regions (İmalat Bölgesi / İmalat Kotu) Upload Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <MapPin className="h-5 w-5" />
+            İmalat Bölgesi / İmalat Kotu Tanımları
+          </CardTitle>
+          <CardDescription>
+            Projede kullanılacak geçerli İmalat Bölgesi ve İmalat Kotu kombinasyonlarını Excel'den içe aktarın.
+            İmalat ilerlemesi veri girişinde bu listede olmayan bölge/kot kombinasyonları kabul edilmeyecektir.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Existing combinations */}
+          {workRegions && workRegions.length > 0 && (
+            <Alert>
+              <CheckCircle2 className="h-4 w-4" />
+              <AlertDescription>
+                <span className="font-medium">Tanımlı kombinasyonlar ({workRegions.length}): </span>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {workRegions.map((r) => (
+                    <Badge key={r.id} variant="secondary">
+                      {r.region} / {r.imalatKotu}
+                    </Badge>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Yeni dosya yüklerseniz mevcut liste silinip yeni verilerle değiştirilecektir.
+                </p>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* File upload */}
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              Excel formatı: İmalat Bölgesi, İmalat Kotu (her satır geçerli bir kombinasyonu temsil eder)
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={downloadWorkRegionsTemplate}
+                data-testid="button-download-work-regions-template"
+              >
+                <FileSpreadsheet className="h-4 w-4 mr-2" />
+                Şablon İndir
+              </Button>
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                ref={workRegionsFileInputRef}
+                onChange={handleWorkRegionsFileChange}
+                className="hidden"
+                data-testid="input-work-regions-file"
+              />
+              <Button
+                variant="outline"
+                onClick={() => workRegionsFileInputRef.current?.click()}
+                disabled={workRegionsMutation.isPending}
+                data-testid="button-upload-work-regions"
+              >
+                {workRegionsMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4 mr-2" />
+                )}
+                Excel Dosyası Seç
+              </Button>
+              {workRegionsFile && (
+                <span className="text-sm text-muted-foreground">{workRegionsFile.name}</span>
+              )}
+            </div>
+          </div>
+
+          {/* Upload status */}
+          {workRegionsUploadStatus && (
+            <Alert variant={workRegionsUploadStatus.success ? "default" : "destructive"}>
+              {workRegionsUploadStatus.success ? (
+                <CheckCircle2 className="h-4 w-4" />
+              ) : (
+                <AlertCircle className="h-4 w-4" />
+              )}
+              <AlertDescription className="whitespace-pre-line">
+                {workRegionsUploadStatus.message}
               </AlertDescription>
             </Alert>
           )}

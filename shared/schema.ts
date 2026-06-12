@@ -107,6 +107,30 @@ export const monthlyWorkItemSchedule = pgTable("monthly_work_item_schedule", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Work Regions (İmalat Bölgesi / İmalat Kotu tanımları)
+export const workRegions = pgTable("work_regions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  region: varchar("region").notNull(), // İmalat Bölgesi
+  imalatKotu: varchar("imalat_kotu").notNull(), // İmalat Kotu
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertWorkRegionSchema = createInsertSchema(workRegions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const workRegionsRelations = relations(workRegions, ({ one }) => ({
+  project: one(projects, {
+    fields: [workRegions.projectId],
+    references: [projects.id],
+  }),
+}));
+
+export type WorkRegion = typeof workRegions.$inferSelect;
+export type InsertWorkRegion = z.infer<typeof insertWorkRegionSchema>;
+
 // Project members for authorization
 export const projectMembers = pgTable("project_members", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -146,6 +170,7 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
   dailyEntries: many(dailyEntries),
   monthlySchedule: many(monthlySchedule),
   monthlyWorkItemSchedule: many(monthlyWorkItemSchedule),
+  workRegions: many(workRegions),
   members: many(projectMembers),
 }));
 

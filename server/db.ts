@@ -11,6 +11,7 @@ if (!process.env.DATABASE_URL) {
 // Render için SSL ayarları gerekebilir, güvenli bağlantı kuruyoruz
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
 });
 
 export const db = drizzle(pool, { schema });

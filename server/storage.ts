@@ -6,6 +6,7 @@ import {
   monthlySchedule,
   monthlyWorkItemSchedule,
   detailedMonthlyPlan,
+  workRegions,
   projectMembers,
   projectInvitations,
   type User,
@@ -22,6 +23,8 @@ import {
   type InsertMonthlyWorkItemSchedule,
   type DetailedMonthlyPlan,
   type InsertDetailedMonthlyPlan,
+  type WorkRegion,
+  type InsertWorkRegion,
   type ProjectMember,
   type InsertProjectMember,
   type ProjectInvitation,
@@ -72,6 +75,10 @@ export interface IStorage {
   createDetailedMonthlyPlans(plans: InsertDetailedMonthlyPlan[]): Promise<DetailedMonthlyPlan[]>;
   deleteDetailedMonthlyPlan(projectId: string, year: number, month: number): Promise<void>;
   getDetailedMonthlyPlanReport(projectId: string, year: number, month: number): Promise<any[]>;
+
+  getWorkRegions(projectId: string): Promise<WorkRegion[]>;
+  createWorkRegions(regions: InsertWorkRegion[]): Promise<WorkRegion[]>;
+  deleteWorkRegions(projectId: string): Promise<void>;
   
   getProjectMembers(projectId: string): Promise<ProjectMember[]>;
   getProjectMembersWithUsers(projectId: string): Promise<(ProjectMember & { user: User | null })[]>;
@@ -362,6 +369,23 @@ export class DatabaseStorage implements IStorage {
     await db.delete(monthlyWorkItemSchedule).where(eq(monthlyWorkItemSchedule.projectId, projectId));
   }
 
+  async getWorkRegions(projectId: string): Promise<WorkRegion[]> {
+    return await db
+      .select()
+      .from(workRegions)
+      .where(eq(workRegions.projectId, projectId))
+      .orderBy(workRegions.region, workRegions.imalatKotu);
+  }
+
+  async createWorkRegions(regions: InsertWorkRegion[]): Promise<WorkRegion[]> {
+    if (regions.length === 0) return [];
+    return await db.insert(workRegions).values(regions).returning();
+  }
+
+  async deleteWorkRegions(projectId: string): Promise<void> {
+    await db.delete(workRegions).where(eq(workRegions.projectId, projectId));
+  }
+
   async getProjectMembers(projectId: string): Promise<ProjectMember[]> {
     return await db
       .select()
@@ -480,6 +504,25 @@ export class DatabaseStorage implements IStorage {
 
   async getDetailedMonthlyPlanReport(projectId: string, year: number, month: number): Promise<any[]> {
     const result = await db.execute(sql`
+      WITH actual_groups AS (
+        SELECT
+          wi.id AS work_item_id,
+          wi.name AS work_item_name,
+          wi.budget_code,
+          wi.parent_budget_code AS budget_code_parent,
+          wi.category,
+          wi.unit,
+          trim(substring(de.notes from 'Bölge:\s*([^,]+)')) AS region,
+          de.imalat_kotu,
+          SUM(de.quantity) AS actual_quantity
+        FROM daily_entries de
+        JOIN work_items wi ON wi.id = de.work_item_id
+        WHERE wi.project_id = ${projectId}
+          AND lower(trim(wi.unit)) = 'm3'
+          AND EXTRACT(YEAR FROM de.entry_date::date) = ${year}
+          AND EXTRACT(MONTH FROM de.entry_date::date) = ${month}
+        GROUP BY wi.id, wi.name, wi.budget_code, wi.parent_budget_code, wi.category, wi.unit, region, de.imalat_kotu
+      )
       SELECT
         dmp.id,
         dmp.work_item_name AS "workItemName",
@@ -498,13 +541,41 @@ export class DatabaseStorage implements IStorage {
       LEFT JOIN daily_entries de
         ON de.work_item_id = wi.id
         AND (dmp.imalat_kotu IS NULL OR dmp.imalat_kotu = '' OR de.imalat_kotu = dmp.imalat_kotu)
+        AND (dmp.region IS NULL OR dmp.region = '' OR lower(trim(substring(de.notes from 'Bölge:\s*([^,]+)'))) = lower(dmp.region))
         AND EXTRACT(YEAR FROM de.entry_date::date) = dmp.year
         AND EXTRACT(MONTH FROM de.entry_date::date) = dmp.month
       WHERE dmp.project_id = ${projectId}
         AND dmp.year = ${year}
         AND dmp.month = ${month}
+        AND lower(trim(dmp.unit)) = 'm3'
       GROUP BY dmp.id, dmp.work_item_name, dmp.budget_code, dmp.budget_code_parent, dmp.category, dmp.unit, dmp.region, dmp.imalat_kotu, dmp.planned_quantity
-      ORDER BY dmp.work_item_name, dmp.region, dmp.imalat_kotu
+
+      UNION ALL
+
+      SELECT
+        concat('actual-', ag.work_item_id, '-', COALESCE(ag.region, ''), '-', COALESCE(ag.imalat_kotu, '')) AS id,
+        ag.work_item_name AS "workItemName",
+        ag.budget_code AS "budgetCode",
+        ag.budget_code_parent AS "budgetCodeParent",
+        ag.category,
+        ag.unit,
+        ag.region,
+        ag.imalat_kotu AS "imalatKotu",
+        0 AS "plannedQuantity",
+        ag.actual_quantity AS "actualQuantity"
+      FROM actual_groups ag
+      WHERE ag.actual_quantity <> 0
+        AND NOT EXISTS (
+          SELECT 1 FROM detailed_monthly_plan dmp2
+          WHERE dmp2.project_id = ${projectId}
+            AND dmp2.year = ${year}
+            AND dmp2.month = ${month}
+            AND dmp2.budget_code = ag.budget_code
+            AND (COALESCE(dmp2.imalat_kotu, '') = '' OR lower(dmp2.imalat_kotu) = lower(ag.imalat_kotu))
+            AND (COALESCE(dmp2.region, '') = '' OR lower(dmp2.region) = lower(ag.region))
+        )
+
+      ORDER BY "workItemName", region, "imalatKotu"
     `);
     return (result.rows as any[]).map((row) => ({
       ...row,

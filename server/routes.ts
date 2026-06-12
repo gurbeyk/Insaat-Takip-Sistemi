@@ -9,6 +9,7 @@ import {
   insertMonthlyScheduleSchema,
   insertMonthlyWorkItemScheduleSchema,
   insertDetailedMonthlyPlanSchema,
+  insertWorkRegionSchema,
   insertProjectMemberSchema,
   insertProjectInvitationSchema,
 } from "@shared/schema";
@@ -481,6 +482,48 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching detailed monthly plan report:", error);
       res.status(500).json({ message: "Failed to fetch report" });
+    }
+  });
+
+  // Work Regions (İmalat Bölgesi / İmalat Kotu tanımları)
+  app.get("/api/projects/:id/work-regions", isAuthenticated, async (req: any, res) => {
+    try {
+      const projectId = req.params.id;
+      const userId = req.user.id.toString();
+      if (!(await storage.canAccessProject(projectId, userId))) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      const regions = await storage.getWorkRegions(projectId);
+      res.json(regions);
+    } catch (error) {
+      console.error("Error fetching work regions:", error);
+      res.status(500).json({ message: "Failed to fetch work regions" });
+    }
+  });
+
+  app.post("/api/projects/:id/work-regions/bulk", isAuthenticated, async (req: any, res) => {
+    try {
+      const projectId = req.params.id;
+      const userId = req.user.id.toString();
+      if (!(await storage.canAccessProject(projectId, userId))) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      const items = req.body.items as any[];
+      if (!items || items.length === 0) {
+        return res.status(400).json({ message: "En az bir kayıt gerekli. Boş veri gönderilemez." });
+      }
+      await storage.deleteWorkRegions(projectId);
+      const parsedItems = items.map((item) =>
+        insertWorkRegionSchema.parse({ ...item, projectId })
+      );
+      const regions = await storage.createWorkRegions(parsedItems);
+      res.status(201).json({ count: regions.length, regions });
+    } catch (error) {
+      console.error("Error bulk creating work regions:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Geçersiz veri formatı", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create work regions" });
     }
   });
 

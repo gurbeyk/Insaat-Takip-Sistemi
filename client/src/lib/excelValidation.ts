@@ -152,7 +152,8 @@ export function validateWorkItems(
 
 export function validateWorkProgress(
   jsonData: Record<string, unknown>[],
-  workItemMap: Map<string, string>
+  workItemMap: Map<string, string>,
+  validRegionKotuPairs?: Set<string>
 ): ValidationResult<WorkProgressRow> {
   const validItems: WorkProgressRow[] = [];
   const errors: ValidationError[] = [];
@@ -222,13 +223,38 @@ export function validateWorkProgress(
       return;
     }
 
+    const region = String(regionRaw).trim();
+    const imalatKotu = String(imalatKotuRaw).trim();
+
+    if (validRegionKotuPairs && validRegionKotuPairs.size > 0) {
+      if (!region || !imalatKotu) {
+        errors.push({
+          row: rowNum,
+          field: "İmalat Bölgesi / İmalat Kotu",
+          value: `${region || "-"} / ${imalatKotu || "-"}`,
+          message: "İmalat Bölgesi ve İmalat Kotu birlikte girilmelidir.",
+        });
+        return;
+      }
+
+      if (!validRegionKotuPairs.has(`${region}|${imalatKotu}`)) {
+        errors.push({
+          row: rowNum,
+          field: "İmalat Bölgesi / İmalat Kotu",
+          value: `${region} / ${imalatKotu}`,
+          message: `"${region} / ${imalatKotu}" kombinasyonu proje ayarlarında tanımlı değil.`,
+        });
+        return;
+      }
+    }
+
     validItems.push({
       workItemId,
       entryDate,
       quantity,
       ratio: String(ratioRaw).trim() || undefined,
-      region: String(regionRaw).trim() || undefined,
-      imalatKotu: String(imalatKotuRaw).trim() || undefined,
+      region: region || undefined,
+      imalatKotu: imalatKotu || undefined,
     });
   });
 
@@ -508,6 +534,78 @@ export function formatValidationSummary(
   }
   
   return parts.join(" ");
+}
+
+// Work Regions (İmalat Bölgesi / İmalat Kotu tanımları) validation
+export interface WorkRegionRow {
+  region: string;
+  imalatKotu: string;
+}
+
+export function validateWorkRegions(
+  jsonData: Record<string, unknown>[]
+): ValidationResult<WorkRegionRow> {
+  const validItems: WorkRegionRow[] = [];
+  const errors: ValidationError[] = [];
+  const warnings: string[] = [];
+
+  if (jsonData.length === 0) {
+    warnings.push("Excel dosyası boş veya okunamadı.");
+    return { validItems, errors, warnings };
+  }
+
+  const firstRow = jsonData[0];
+  const expectedColumns = ["İmalat Bölgesi", "İmalat Kotu"];
+  const hasExpectedColumns = expectedColumns.some(col => col in firstRow);
+
+  if (!hasExpectedColumns) {
+    warnings.push(
+      "Excel dosyasında beklenen sütunlar bulunamadı. Beklenen sütunlar: " +
+      expectedColumns.join(", ")
+    );
+    return { validItems, errors, warnings };
+  }
+
+  const seenPairs = new Set<string>();
+
+  jsonData.forEach((row, index) => {
+    const rowNum = index + 2;
+
+    const regionRaw = row["İmalat Bölgesi"] ?? row["region"] ?? "";
+    const imalatKotuRaw = row["İmalat Kotu"] ?? row["imalatKotu"] ?? "";
+
+    const region = String(regionRaw).trim();
+    const imalatKotu = String(imalatKotuRaw).trim();
+
+    if (!region && !imalatKotu) {
+      return;
+    }
+
+    if (!region || !imalatKotu) {
+      errors.push({
+        row: rowNum,
+        field: "İmalat Bölgesi / İmalat Kotu",
+        value: `${region || "-"} / ${imalatKotu || "-"}`,
+        message: "İmalat Bölgesi ve İmalat Kotu birlikte girilmelidir.",
+      });
+      return;
+    }
+
+    const key = `${region}|${imalatKotu}`;
+    if (seenPairs.has(key)) {
+      warnings.push(`Satır ${rowNum}: "${region} / ${imalatKotu}" kombinasyonu tekrar ediyor, yoksayıldı.`);
+      return;
+    }
+    seenPairs.add(key);
+
+    validItems.push({ region, imalatKotu });
+  });
+
+  if (validItems.length === 0 && errors.length === 0 && warnings.length === 0) {
+    warnings.push("Geçerli İmalat Bölgesi / İmalat Kotu kombinasyonu bulunamadı.");
+  }
+
+  return { validItems, errors, warnings };
 }
 
 // Work Schedule (İş Programı) validation

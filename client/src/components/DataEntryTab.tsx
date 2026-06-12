@@ -23,7 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { FileSpreadsheet, Upload, Loader2, Download, Clock, TrendingUp, Trash2, Pencil, Check, X, ChevronLeft, ChevronRight, Filter, Calendar } from "lucide-react";
 import * as XLSX from "xlsx";
-import type { Project, WorkItem, DailyEntry } from "@shared/schema";
+import type { Project, WorkItem, DailyEntry, WorkRegion } from "@shared/schema";
 import { 
   validateWorkProgress, 
   validateManHours, 
@@ -163,6 +163,14 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
   const { data: entries, isLoading: entriesLoading } = useQuery<(DailyEntry & { workItem?: WorkItem })[]>({
     queryKey: ["/api/projects", project.id, "entries"],
   });
+
+  const { data: workRegions } = useQuery<WorkRegion[]>({
+    queryKey: [`/api/projects/${project.id}/work-regions`],
+  });
+
+  const validRegionKotuPairs = useMemo(() => {
+    return new Set((workRegions || []).map((r) => `${r.region}|${r.imalatKotu}`));
+  }, [workRegions]);
 
   const allProgressEntries = (entries || []).filter(e => e.quantity !== 0);
   const allManHoursEntries = (entries || []).filter(e => e.manHours !== 0);
@@ -314,7 +322,7 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
         (project.workItems || []).map((item) => [item.budgetCode, item.id])
       );
 
-      const result = validateWorkProgress(jsonData, workItemMap);
+      const result = validateWorkProgress(jsonData, workItemMap, validRegionKotuPairs);
       setTotalRows(jsonData.length);
       setValidationResult(result);
       setPendingEntries(result.validItems);
@@ -528,10 +536,32 @@ export function DataEntryTab({ project }: DataEntryTabProps) {
 
   const saveEditing = (entryId: string) => {
     if (editType === 'progress') {
+      const region = editValues.region.trim();
+      const imalatKotu = editValues.imalatKotu.trim();
+
+      if (validRegionKotuPairs.size > 0) {
+        if (!region || !imalatKotu) {
+          toast({
+            title: "Hata",
+            description: "İmalat Bölgesi ve İmalat Kotu birlikte girilmelidir.",
+            variant: "destructive",
+          });
+          return;
+        }
+        if (!validRegionKotuPairs.has(`${region}|${imalatKotu}`)) {
+          toast({
+            title: "Hata",
+            description: `"${region} / ${imalatKotu}" kombinasyonu proje ayarlarında tanımlı değil.`,
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
       const noteParts: string[] = [];
       if (editValues.ratio) noteParts.push(`Oran: ${editValues.ratio}`);
       if (editValues.region) noteParts.push(`Bölge: ${editValues.region}`);
-      
+
       updateMutation.mutate({
         entryId,
         data: {

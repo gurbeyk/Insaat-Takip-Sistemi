@@ -230,7 +230,7 @@ function DetailedMonthlyPlanSection({ projectId }: { projectId: string }) {
               const gtRemaining = groupedDetailReport.reduce((s, g) => s + g.totalRemaining, 0);
               const gtProgress = gtPlanned > 0 ? Math.min(100, (gtActual / gtPlanned) * 100) : 0;
               return (
-                <div className="flex items-center gap-4 p-3 bg-muted/50 rounded-lg border font-medium text-sm">
+                <div className="flex items-center gap-4 pl-3 pr-3 py-3 bg-muted/50 rounded-lg border font-medium text-sm">
                   <span className="flex-1">TOPLAM</span>
                   <span className="w-28 text-right text-muted-foreground">{gtPlanned.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
                   <span className="w-28 text-right text-blue-600">{gtActual.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
@@ -253,7 +253,7 @@ function DetailedMonthlyPlanSection({ projectId }: { projectId: string }) {
                 <div key={wiKey} className="border rounded-lg overflow-hidden">
                   {/* Work item header */}
                   <button
-                    className="w-full flex items-center gap-3 p-3 bg-card hover:bg-muted/40 transition-colors text-left"
+                    className="w-full flex items-center gap-4 pl-3 pr-3 py-3 bg-card hover:bg-muted/40 transition-colors text-left"
                     onClick={() => {
                       setExpandedItems(prev => {
                         const next = new Set(prev);
@@ -264,11 +264,10 @@ function DetailedMonthlyPlanSection({ projectId }: { projectId: string }) {
                   >
                     <span className={`text-xs transition-transform ${wiExpanded ? "rotate-90" : ""}`}>▶</span>
                     <span className="font-semibold text-sm flex-1">{wg.workItemName}</span>
-                    <Badge variant="outline" className="text-xs">{wg.budgetCode}</Badge>
-                    <span className="text-xs text-muted-foreground w-24 text-right">{wg.totalPlanned.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
-                    <span className="text-xs text-blue-600 w-24 text-right">{wg.totalActual.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
-                    <span className="text-xs text-orange-600 w-24 text-right">{wg.totalRemaining.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
-                    <div className="flex items-center gap-2 w-28">
+                    <span className="text-xs text-muted-foreground w-28 text-right">{wg.totalPlanned.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
+                    <span className="text-xs text-blue-600 w-28 text-right">{wg.totalActual.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
+                    <span className="text-xs text-orange-600 w-28 text-right">{wg.totalRemaining.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
+                    <div className="flex items-center gap-2 w-32">
                       <div className="flex-1 bg-muted rounded-full h-1.5">
                         <div className={`h-1.5 rounded-full ${wg.progress >= 100 ? "bg-green-500" : wg.progress >= 70 ? "bg-blue-500" : "bg-orange-400"}`} style={{ width: `${wg.progress}%` }} />
                       </div>
@@ -282,46 +281,52 @@ function DetailedMonthlyPlanSection({ projectId }: { projectId: string }) {
                       {wg.regions.map((rg) => {
                         const rgKey = wiKey + "|" + rg.region;
                         const rgExpanded = expandedRegions.has(rgKey);
+                        const hideKotuBreakdown = wg.workItemName === "Merdiven Beton Isleri";
+                        const RegionTag = hideKotuBreakdown ? "div" : "button";
                         return (
                           <div key={rg.region}>
                             {/* Region header */}
-                            <button
-                              className="w-full flex items-center gap-3 px-6 py-2.5 bg-muted/20 hover:bg-muted/40 transition-colors text-left"
-                              onClick={() => {
-                                setExpandedRegions(prev => {
-                                  const next = new Set(prev);
-                                  if (next.has(rgKey)) next.delete(rgKey); else next.add(rgKey);
-                                  return next;
-                                });
-                              }}
+                            <RegionTag
+                              className="w-full flex items-center gap-4 pl-6 pr-3 py-2.5 bg-muted/20 hover:bg-muted/40 transition-colors text-left"
+                              {...(!hideKotuBreakdown && {
+                                onClick: () => {
+                                  setExpandedRegions(prev => {
+                                    const next = new Set(prev);
+                                    if (next.has(rgKey)) next.delete(rgKey); else next.add(rgKey);
+                                    return next;
+                                  });
+                                },
+                              })}
                             >
-                              <span className={`text-xs transition-transform ${rgExpanded ? "rotate-90" : ""}`}>▶</span>
+                              {!hideKotuBreakdown && (
+                                <span className={`text-xs transition-transform ${rgExpanded ? "rotate-90" : ""}`}>▶</span>
+                              )}
                               <span className="font-medium text-sm flex-1 text-muted-foreground">{rg.region || "(Bölge belirtilmemiş)"}</span>
-                              <span className="text-xs text-muted-foreground w-24 text-right">{rg.totalPlanned.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
-                              <span className="text-xs text-blue-600 w-24 text-right">{rg.totalActual.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
-                              <span className="text-xs text-orange-600 w-24 text-right">{rg.totalRemaining.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
-                              <div className="flex items-center gap-2 w-28">
+                              <span className="text-xs text-muted-foreground w-28 text-right">{rg.totalPlanned.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
+                              <span className="text-xs text-blue-600 w-28 text-right">{rg.totalActual.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
+                              <span className="text-xs text-orange-600 w-28 text-right">{rg.totalRemaining.toLocaleString("tr-TR", { maximumFractionDigits: 1 })}</span>
+                              <div className="flex items-center gap-2 w-32">
                                 <div className="flex-1 bg-muted rounded-full h-1.5">
                                   <div className={`h-1.5 rounded-full ${rg.progress >= 100 ? "bg-green-500" : rg.progress >= 70 ? "bg-blue-500" : "bg-orange-400"}`} style={{ width: `${rg.progress}%` }} />
                                 </div>
                                 <span className={`text-xs w-10 text-right ${rg.progress >= 100 ? "text-green-600" : rg.progress >= 70 ? "text-blue-600" : "text-orange-500"}`}>%{rg.progress.toFixed(0)}</span>
                               </div>
-                            </button>
+                            </RegionTag>
 
                             {/* İmalat Kotu rows — no table header per request */}
-                            {rgExpanded && (
+                            {!hideKotuBreakdown && rgExpanded && (
                               <div className="bg-background">
                                 {rg.rows.map((row) => (
-                                  <div key={row.id} className="grid grid-cols-5 gap-2 px-10 py-2 text-sm hover:bg-muted/10 border-b last:border-0">
-                                    <span className="font-mono text-xs text-muted-foreground">{row.imalatKotu || "—"}</span>
-                                    <span className="text-right">{row.plannedQuantity.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}</span>
-                                    <span className="text-right text-blue-600">{row.actualQuantity.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}</span>
-                                    <span className="text-right text-orange-600">{row.remainingQuantity.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}</span>
-                                    <div className="flex items-center gap-2 justify-end">
-                                      <div className="w-16 bg-muted rounded-full h-1.5">
+                                  <div key={row.id} className="flex items-center gap-4 pl-10 pr-3 py-2 text-sm hover:bg-muted/10 border-b last:border-0">
+                                    <span className="font-mono text-xs text-muted-foreground flex-1">{row.imalatKotu || "—"}</span>
+                                    <span className="w-28 text-right">{row.plannedQuantity.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}</span>
+                                    <span className="w-28 text-right text-blue-600">{row.actualQuantity.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}</span>
+                                    <span className="w-28 text-right text-orange-600">{row.remainingQuantity.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}</span>
+                                    <div className="flex items-center gap-2 w-32">
+                                      <div className="flex-1 bg-muted rounded-full h-1.5">
                                         <div className={`h-1.5 rounded-full ${row.progressPercent >= 100 ? "bg-green-500" : row.progressPercent >= 70 ? "bg-blue-500" : "bg-orange-400"}`} style={{ width: `${row.progressPercent}%` }} />
                                       </div>
-                                      <span className={`text-xs w-8 text-right ${row.progressPercent >= 100 ? "text-green-600" : row.progressPercent >= 70 ? "text-blue-600" : "text-orange-500"}`}>%{row.progressPercent.toFixed(0)}</span>
+                                      <span className={`text-xs w-10 text-right ${row.progressPercent >= 100 ? "text-green-600" : row.progressPercent >= 70 ? "text-blue-600" : "text-orange-500"}`}>%{row.progressPercent.toFixed(0)}</span>
                                     </div>
                                   </div>
                                 ))}
@@ -348,6 +353,21 @@ export default function ProjectDetail() {
 
   const { data: project, isLoading, error, refetch } = useQuery<ProjectWithDetails>({
     queryKey: [`/api/projects/${params.id}`],
+    enabled: !!params.id,
+  });
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonthNum = now.getMonth() + 1; // 1-indexed for API
+
+  const { data: currentMonthPlanReport } = useQuery<DetailedPlanReportRow[]>({
+    queryKey: ["/api/projects", params.id, "detailed-monthly-plan", "report", currentYear, currentMonthNum],
+    queryFn: async () => {
+      const url = `/api/projects/${params.id}/detailed-monthly-plan/report?year=${currentYear}&month=${currentMonthNum}`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch detailed plan report");
+      return res.json();
+    },
     enabled: !!params.id,
   });
 
@@ -435,9 +455,14 @@ export default function ProjectDetail() {
         progressMH: 0,
         earnedMH: 0,
         efficiency: 0,
+        dailyAverageConcrete: 0,
+        lastEntryDay: 0,
+        remainingDays: 0,
+        remainingPlannedConcrete: 0,
+        requiredDailyAverageConcrete: 0,
       };
     }
-    
+
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth(); // 0-indexed
@@ -459,46 +484,65 @@ export default function ProjectDetail() {
     let monthlyTemelConcrete = 0;
     let monthlyUstyapiMH = 0;
     let monthlyUstyapiConcrete = 0;
-    
+
+    // Track the latest entry date (for m3 items) within the current month
+    let lastEntryDay = 0;
+
     project.dailyEntries?.forEach((entry) => {
       const entryDate = new Date(entry.entryDate);
       if (entryDate.getFullYear() === currentYear && entryDate.getMonth() === currentMonth) {
         monthlySpentMH += entry.manHours || 0;
-        
+
         const workItem = project.workItems?.find(wi => wi.id === entry.workItemId);
-        
+
         // Poured concrete - check if unit is m3
         const unit = workItemUnits.get(entry.workItemId) || "";
         if (unit === "m3") {
           monthlyPouredConcrete += entry.quantity || 0;
-          
+
+          if (entryDate.getDate() > lastEntryDay) {
+            lastEntryDay = entryDate.getDate();
+          }
+
           if (workItem?.category === 'Temel') {
             monthlyTemelConcrete += entry.quantity || 0;
           } else if (workItem?.category === 'Ustyapi') {
             monthlyUstyapiConcrete += entry.quantity || 0;
           }
         }
-        
+
         if (workItem?.category === 'Temel') {
           monthlyTemelMH += entry.manHours || 0;
         } else if (workItem?.category === 'Ustyapi') {
           monthlyUstyapiMH += entry.manHours || 0;
         }
-        
+
         // Earned man-hours: quantity × unit man-hours
         const unitMH = workItemUnitManHours.get(entry.workItemId) || 0;
         monthlyEarnedMH += (entry.quantity || 0) * unitMH;
       }
     });
-    
+
     // İlerleme MH = harcanan / dökülen beton
     const progressMH = monthlyPouredConcrete > 0 ? monthlySpentMH / monthlyPouredConcrete : 0;
     const temelProgressMH = monthlyTemelConcrete > 0 ? monthlyTemelMH / monthlyTemelConcrete : 0;
     const ustyapiProgressMH = monthlyUstyapiConcrete > 0 ? monthlyUstyapiMH / monthlyUstyapiConcrete : 0;
-    
+
     // Verimlilik % = kazanılan / gerçekleşen × 100
     const efficiency = monthlySpentMH > 0 ? (monthlyEarnedMH / monthlySpentMH) * 100 : 0;
-    
+
+    // Günlük ortalama dökülen beton = aylık dökülen / son veri girişi günü
+    const dailyAverageConcrete = lastEntryDay > 0 ? monthlyPouredConcrete / lastEntryDay : 0;
+
+    // Kalan günde gereken ortalama = (planlanan - dökülen) / kalan gün
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const remainingDays = Math.max(0, daysInMonth - lastEntryDay);
+    const totalPlannedConcrete = (currentMonthPlanReport || [])
+      .filter(r => r.unit === "m3")
+      .reduce((sum, r) => sum + (r.plannedQuantity || 0), 0);
+    const remainingPlannedConcrete = Math.max(0, totalPlannedConcrete - monthlyPouredConcrete);
+    const requiredDailyAverageConcrete = remainingDays > 0 ? remainingPlannedConcrete / remainingDays : remainingPlannedConcrete;
+
     // Get Turkish month name
     const monthNames = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", 
                         "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
@@ -514,8 +558,13 @@ export default function ProjectDetail() {
       ustyapiProgressMH,
       earnedMH: monthlyEarnedMH,
       efficiency,
+      dailyAverageConcrete,
+      lastEntryDay,
+      remainingDays,
+      remainingPlannedConcrete,
+      requiredDailyAverageConcrete,
     };
-  }, [project]);
+  }, [project, currentMonthPlanReport]);
 
   // Total project earned man-hours (all time)
   const projectTotalEarnedMH = useMemo(() => {
@@ -1150,6 +1199,16 @@ export default function ProjectDetail() {
                     {currentMonthStats.pouredConcrete.toLocaleString("tr-TR", { maximumFractionDigits: 2 })}
                   </p>
                   <p className="text-sm text-muted-foreground">Aylık Dökülen Beton (m³)</p>
+                  <div className="mt-1 space-y-0.5 border-t pt-1">
+                    <div className="text-[10px] text-muted-foreground flex justify-between items-center">
+                      <span>Günlük Ortalama:</span>
+                      <span className="font-medium text-foreground">{currentMonthStats.dailyAverageConcrete > 0 ? currentMonthStats.dailyAverageConcrete.toLocaleString("tr-TR", { maximumFractionDigits: 2 }) : "-"}</span>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground flex justify-between items-center">
+                      <span>Kalan Gün İçin Gereken Ort.:</span>
+                      <span className="font-medium text-foreground">{currentMonthStats.remainingDays > 0 ? currentMonthStats.requiredDailyAverageConcrete.toLocaleString("tr-TR", { maximumFractionDigits: 2 }) : "-"}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </CardContent>
