@@ -416,6 +416,21 @@ export default function ProjectDetail() {
     enabled: !!params.id,
   });
 
+  const nextMonthDate = new Date(currentYear, currentMonthNum - 1 + 1, 1);
+  const nextMonthYear = nextMonthDate.getFullYear();
+  const nextMonthNum = nextMonthDate.getMonth() + 1;
+
+  const { data: nextMonthPlanReport } = useQuery<DetailedPlanReportRow[]>({
+    queryKey: ["/api/projects", params.id, "detailed-monthly-plan", "report", nextMonthYear, nextMonthNum],
+    queryFn: async () => {
+      const url = `/api/projects/${params.id}/detailed-monthly-plan/report?year=${nextMonthYear}&month=${nextMonthNum}`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch detailed plan report");
+      return res.json();
+    },
+    enabled: !!params.id,
+  });
+
   const { data: weather, isLoading: weatherLoading } = useQuery<WeatherData>({
     queryKey: ['/api/weather', project?.location],
     queryFn: async () => {
@@ -610,6 +625,29 @@ export default function ProjectDetail() {
       requiredDailyAverageConcrete,
     };
   }, [project, currentMonthPlanReport]);
+
+  // Önümüzdeki 7 gün içinde planlanan döküm tarihleri
+  const upcomingPours = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const horizon = new Date(today);
+    horizon.setDate(horizon.getDate() + 7);
+
+    const rows = [...(currentMonthPlanReport || []), ...(nextMonthPlanReport || [])];
+    const result: { workItemName: string; region: string; imalatKotu: string; date: string; label: string }[] = [];
+
+    for (const row of rows) {
+      for (const [date, label] of [[row.dokumTarihi1, "Döküm 1"], [row.dokumTarihi2, "Döküm 2"]] as const) {
+        if (!date) continue;
+        const d = new Date(date + "T00:00:00");
+        if (d >= today && d <= horizon) {
+          result.push({ workItemName: row.workItemName, region: row.region, imalatKotu: row.imalatKotu, date, label });
+        }
+      }
+    }
+
+    return result.sort((a, b) => a.date.localeCompare(b.date));
+  }, [currentMonthPlanReport, nextMonthPlanReport]);
 
   // Total project earned man-hours (all time)
   const projectTotalEarnedMH = useMemo(() => {
@@ -1392,6 +1430,42 @@ export default function ProjectDetail() {
                   </div>
                   <Progress value={timeProgress} className={`h-1.5 ${getProgressColor(timeProgress)}`} />
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Önümüzdeki 7 Gün - Planlanan Dökümler */}
+            <Card className="mt-4">
+              <CardContent className="pt-5 pb-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-2.5 rounded-lg bg-blue-500/10">
+                    <Calendar className="h-5 w-5 text-blue-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold">Önümüzdeki 7 Gün</p>
+                    <p className="text-xs text-muted-foreground">Planlanan Dökümler</p>
+                  </div>
+                </div>
+                {upcomingPours.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-2">
+                    Önümüzdeki 7 gün için planlanan döküm bulunmuyor.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {upcomingPours.map((p, i) => {
+                      const d = new Date(p.date + "T00:00:00");
+                      const dateLabel = d.toLocaleDateString("tr-TR", { day: "2-digit", month: "2-digit" });
+                      return (
+                        <div key={i} className="flex items-center justify-between gap-2 text-sm border-b last:border-0 pb-2 last:pb-0">
+                          <div className="min-w-0">
+                            <p className="font-medium truncate">{p.region || "—"} / {p.imalatKotu || "—"}</p>
+                            <p className="text-xs text-muted-foreground truncate">{p.label}</p>
+                          </div>
+                          <Badge variant="outline" className="text-xs whitespace-nowrap">{dateLabel}</Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
